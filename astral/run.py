@@ -22,30 +22,48 @@ def rounded(o, n=4):
     return r(o, n)
 
 
+def context(e, g):
+    """Facts from either catalogue that often go with a disagreement. Not a diagnosis."""
+    out = []
+    ruwe, plp = checks.f(g["ruwe"]), checks.f(e["point_like_prob"])
+    if ruwe is not None and ruwe > 1.4:
+        out.append("gaia_ruwe_high")           # Gaia's own sign of a poor single-star fit
+    if checks.f(g["pmra"]) is None:
+        out.append("gaia_no_proper_motion")    # position-only Gaia solution
+    if g["phot_variable_flag"] == "VARIABLE":
+        out.append("gaia_variable")
+    if plp is not None and plp < 0.5:
+        out.append("euclid_extended")          # Euclid does not think it is point-like
+    if e["binary_flag"] == "1":
+        out.append("euclid_binary_flag")
+    return " ".join(out)
+
+
 def run_tile(tile, snap, out, offline=False, tol_path=None):
     with open(tol_path or os.path.join(HERE, "tolerances.json")) as fh:
         tol = json.load(fh)
     euclid, epoch_rows, gaia, box = fetch.tile(tile, tol, snap, offline)
-    epoch, half_span, releases = checks.tile_epoch(epoch_rows)
+    epoch, half_span, release = checks.tile_epoch(epoch_rows)
 
     audit = checks.match_audit(euclid, gaia, epoch, box, tol)
     prs = checks.pairs(euclid, gaia, epoch)
-    pos, pos_out = checks.position_check(prs, half_span, tol)
+    pos, pos_out = checks.position_check(prs, tol)
     bri, bri_out = checks.brightness_check(prs, tol)
 
     summary = {
         "tile_index": int(tile),
         "catalogues": {"gaia": "gaiadr3.gaia_source", "euclid": "dr1.mer_catalogue_wide_survey",
-                       "euclid_releases": releases},
+                       "euclid_release": release},
         "box_deg": {"ra_min": box[0], "ra_max": box[1], "dec_min": box[2], "dec_max": box[3]},
         "epoch_year": epoch, "epoch_half_span_year": half_span,
         "counts": {"euclid_candidates": len(euclid), "gaia_in_box": len(gaia),
                    "euclid_with_gaia_id": sum(1 for e in euclid if e["gaia_id"]),
                    "pairs": len(prs),
-                   "pairs_clean": sum(1 for p in prs if checks.is_clean(p["e"], tol)),
+                   "pairs_tier_a": sum(1 for p in prs if checks.tier(p["e"], tol) == "A"),
+                   "pairs_tier_b": sum(1 for p in prs if checks.tier(p["e"], tol) == "B"),
                    "pairs_with_gaia_spectrum": sum(1 for p in prs if p["g"]["has_xp_continuous"] == "true"),
-                   "pairs_clean_with_gaia_spectrum": sum(
-                       1 for p in prs if p["g"]["has_xp_continuous"] == "true" and checks.is_clean(p["e"], tol))},
+                   "pairs_usable_with_gaia_spectrum": sum(
+                       1 for p in prs if p["g"]["has_xp_continuous"] == "true" and checks.usable(p["e"], tol))},
         "c1_match_audit": {k: len(v) for k, v in audit.items()},
         "c2_position": pos,
         "c3_brightness_colour_fit": bri,
@@ -60,17 +78,17 @@ def run_tile(tile, snap, out, offline=False, tol_path=None):
 
     cols = ["gaia_source_id", "euclid_object_id", "g_mag", "bp_rp", "ra_euclid", "dec_euclid",
             "d_ra_mas", "d_dec_mas", "raw_d_ra_mas", "raw_d_dec_mas", "pos_z", "vis_mag",
-            "vis_resid_mag", "vis_z", "clean", "point_like_prob", "flag_vis", "det_quality_flag",
-            "gaia_match_quality", "pmra", "pmdec", "ruwe", "gaia_variable", "has_gaia_spectrum"]
+            "vis_resid_mag", "vis_z", "tier", "point_like_prob", "flag_vis", "det_quality_flag",
+            "gaia_match_quality", "pmra", "pmdec", "ruwe", "gaia_variable", "has_gaia_spectrum", "context"]
     def row(p):
         e, g = p["e"], p["g"]
-        v = checks.vis_mag(e)
+        v = checks.vis_mag(e, tol["brightness_flux"])
         return [g["source_id"], e["object_id"], r(p["G"]), r(p.get("bp_rp")), e["right_ascension"],
                 e["declination"], r(p["dx"], 2), r(p["dy"], 2), r(p["raw_dx"], 2), r(p["raw_dy"], 2),
                 r(p.get("pos_z"), 2), r(v), r(p.get("vis_resid")), r(p.get("vis_z"), 2),
-                int(checks.is_clean(e, tol)), e["point_like_prob"], e["flag_vis"], e["det_quality_flag"],
+                checks.tier(e, tol), e["point_like_prob"], e["flag_vis"], e["det_quality_flag"],
                 e["gaia_match_quality"], g["pmra"], g["pmdec"], g["ruwe"], g["phot_variable_flag"],
-                g["has_xp_continuous"]]
+                g["has_xp_continuous"], context(e, g)]
     def write(name, ps):
         with open(os.path.join(d, name), "w", newline="") as fh:
             w = csv.writer(fh, lineterminator="\n")

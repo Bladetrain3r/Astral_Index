@@ -3,6 +3,8 @@ import math
 from . import tap
 
 EUCLID_COLS = ("object_id, right_ascension, declination, flux_vis_psf, fluxerr_vis_psf, "
+               "flux_vis_1fwhm_aper, flux_vis_2fwhm_aper, fluxerr_vis_2fwhm_aper, flux_vis_3fwhm_aper, "
+               "flux_detection_total, fluxerr_detection_total, "
                "point_like_prob, point_like_flag, flag_vis, det_quality_flag, spurious_flag, "
                "blended_prob, deblended_flag, binary_flag, variable_flag, vis_det, "
                "gaia_id, gaia_match_quality, tile_index")
@@ -14,7 +16,8 @@ GAIA_ROW_LIMIT = 50000   # the archive's declared hard limit for one query
 
 def euclid_tile(tile, tol, snap, offline=False):
     q = (f"SELECT {EUCLID_COLS} FROM dr1.mer_catalogue_wide_survey WHERE tile_index={int(tile)} "
-         f"AND (gaia_id IS NOT NULL OR flux_vis_psf > {tol['candidate_flux_vis_ujy']})")
+         f"AND (gaia_id IS NOT NULL OR (flux_vis_psf > {tol['candidate_flux_vis_ujy']} "
+         "AND flux_vis_psf < 1000000000000.0))")   # the archive stores empty as NaN and sorts it as large
     return tap.query("euclid", q, snap, f"euclid_tile_{tile}", offline)
 
 

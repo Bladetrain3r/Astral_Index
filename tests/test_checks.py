@@ -66,7 +66,7 @@ class Audit(unittest.TestCase):
         r = checks.match_audit(e, g, 2016.0, self.box, self.tol)
         got = {k: len(v) for k, v in r.items()}
         self.assertEqual(got, {"agree": 1, "differ": 1, "only_euclid": 1, "only_ours": 1,
-                               "duplicate_claim": 1, "gaia_unmatched": 1, "euclid_names_unknown_gaia": 0})
+                               "duplicate_vis_nir": 0, "duplicate_other": 1, "gaia_unmatched": 1, "euclid_names_unknown_gaia": 0})
 
     def test_match_follows_proper_motion(self):
         g = [gaia("A", 10.0, 0.0, 0.0, 1000.0)]               # 1 arcsec per year

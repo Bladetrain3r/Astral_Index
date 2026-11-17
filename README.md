@@ -28,9 +28,12 @@ Not a catalogue, not a mirror, not a discovery claim.
 ## Licence and credits
 
 Code: MIT (`LICENSE`). Data files under `fixtures/` and `data/` are derived from Gaia and Euclid data and
-are **CC BY-NC**: free for non-commercial use with credit, and they are modified from the originals.
+are **CC BY-NC 3.0 IGO**: free for non-commercial use with credit. They are modified from the originals, and
+neither ESA nor the consortia endorse this project.
 
 - This work has made use of data from the European Space Agency (ESA) mission Gaia
-  (https://www.cosmos.esa.int/gaia), processed by the Gaia Data Processing and Analysis Consortium (DPAC).
-- This work has made use of the Euclid DR1 data from the Euclid mission of the European Space Agency (ESA),
-  2026, https://doi.org/10.57780/esa-d079c51. Credit: ESA Euclid/Euclid Consortium/NASA/DR1-2026.
+  (https://www.cosmos.esa.int/gaia), processed by the Gaia Data Processing and Analysis Consortium (DPAC,
+  https://www.cosmos.esa.int/web/gaia/dpac/consortium). Funding for the DPAC has been provided by national
+  institutions, in particular the institutions participating in the Gaia Multilateral Agreement.
+- Data from ESA Euclid/Euclid Consortium/NASA/DR1-2026. This work has made use of the Euclid DR1 data from
+  the Euclid mission of the European Space Agency (ESA), 2026, https://doi.org/10.57780/esa-d079c51.

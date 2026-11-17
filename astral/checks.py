@@ -21,10 +21,16 @@ def year(ts):
 
 
 def tile_epoch(epoch_rows):
-    """Mid-point of the VIS observations of the tile, and half their span, in years."""
+    """The epoch of the tile's catalogue coordinates, and half the span of its observations.
+
+    Euclid documents the coordinate epoch as the tile's reference observation date ("Epoch of source
+    coordinates in the DR1 MER catalogue are hidden", Euclid known issues). With several VIS mosaics
+    for one tile, the one from the latest release is used.
+    """
+    row = sorted(epoch_rows, key=lambda r: (r["release_name"], r["reference_observation_date_time"]))[-1]
     first = min(year(r["first_observation_date_time"]) for r in epoch_rows)
     last = max(year(r["last_observation_date_time"]) for r in epoch_rows)
-    return (first + last) / 2, (last - first) / 2, sorted({r["release_name"] for r in epoch_rows})
+    return year(row["reference_observation_date_time"]), (last - first) / 2, row["release_name"]
 
 
 def propagate(g, epoch):
@@ -65,13 +71,31 @@ def g_bin(g, bins):
     return None
 
 
-def is_clean(e, tol):
-    c = tol["clean"]
-    plp = f(e["point_like_prob"])
-    return (plp is not None and plp >= c["point_like_prob_min"]
-            and e["flag_vis"] == str(c["flag_vis"])
-            and e["det_quality_flag"] == str(c["det_quality_flag"])
-            and e["spurious_flag"] in (str(c["spurious_flag"]), ""))
+def tier(e, tol):
+    """Quality tier of a Euclid source: A (no flags), B (no bad bits), C (not used)."""
+    try:
+        d, v = int(e["det_quality_flag"] or 0), int(e["flag_vis"] or 0)
+    except ValueError:
+        return "C"
+    if e.get("spurious_flag") not in ("0", "", None):
+        return "C"
+    if d == 0 and v == 0:
+        return "A"
+    return "B" if (d | v) & tol["bad_flag_bits"] == 0 else "C"
+
+
+def usable(e, tol):
+    return tier(e, tol) in ("A", "B")
+
+
+def slope(xs, ys):
+    """Least-squares slope of y on x about the medians, ignoring points beyond 5 sigma in y."""
+    if len(xs) < 20:
+        return None
+    mx, my, s = median(xs), median(ys), robust_sigma(ys)
+    k = [(x - mx, y - my) for x, y in zip(xs, ys) if s and abs(y - my) < 5 * s]
+    den = sum(a * a for a, _ in k)
+    return sum(a * b for a, b in k) / den if den else None
 
 
 # ---------------------------------------------------------------- C1 match audit
@@ -115,11 +139,15 @@ def match_audit(euclid, gaia, epoch, box, tol):
     for e in euclid:
         if e["gaia_id"]:
             theirs.setdefault(e["gaia_id"], []).append(e["object_id"])
-    cats = {"agree": [], "differ": [], "only_euclid": [], "only_ours": [], "duplicate_claim": [],
-            "gaia_unmatched": [], "euclid_names_unknown_gaia": []}
+    cats = {"agree": [], "differ": [], "only_euclid": [], "only_ours": [], "duplicate_vis_nir": [],
+            "duplicate_other": [], "gaia_unmatched": [], "euclid_names_unknown_gaia": []}
+    vis = {e["object_id"]: e.get("vis_det", "1") for e in euclid}
     for gid, objs in theirs.items():
         if len(objs) > 1:
-            cats["duplicate_claim"].append((gid, objs))
+            # usual case: one detection on the VIS image plus one on the near-infrared stack
+            n_vis = sum(1 for o in objs if vis[o] == "1")
+            kind = "duplicate_vis_nir" if n_vis == 1 else "duplicate_other"
+            cats[kind].append((gid, objs))
         if gid not in gaia_ids:
             cats["euclid_names_unknown_gaia"].append((gid, objs))
     for g in gaia:
@@ -142,13 +170,13 @@ def match_audit(euclid, gaia, epoch, box, tol):
 # ---------------------------------------------------------------- C2 position residual
 
 def pairs(euclid, gaia, epoch):
-    """Euclid's own matches joined to Gaia rows, with the residual after proper motion."""
+    """Euclid's own matches (VIS detections) joined to Gaia rows, with the residual after proper motion."""
     gi = {g["source_id"]: g for g in gaia}
     out = []
     for e in euclid:
         g = gi.get(e["gaia_id"]) if e["gaia_id"] else None
-        if g is None:
-            continue
+        if g is None or e.get("vis_det", "1") != "1":
+            continue                 # near-infrared-only detections have no VIS position or flux
         ra, dec, had_pm = propagate(g, epoch)
         dx, dy = offset_mas(float(e["right_ascension"]), float(e["declination"]), ra, dec)
         rx, ry = offset_mas(float(e["right_ascension"]), float(e["declination"]),
@@ -158,13 +186,13 @@ def pairs(euclid, gaia, epoch):
     return out
 
 
-def position_check(prs, half_span, tol):
-    clean = [p for p in prs if p["had_pm"] and is_clean(p["e"], tol)]
-    if not clean:
-        return {"n_clean": 0}, []
-    mx, my = median([p["dx"] for p in clean]), median([p["dy"] for p in clean])
+def position_check(prs, tol):
+    use = [p for p in prs if p["had_pm"] and usable(p["e"], tol)]
+    if not use:
+        return {"n_used": 0}, []
+    mx, my = median([p["dx"] for p in use]), median([p["dy"] for p in use])
     bins = {}
-    for p in clean:
+    for p in use:
         b = g_bin(p["G"], tol["g_bins"])
         if b:
             bins.setdefault(b, []).append(p)
@@ -176,26 +204,32 @@ def position_check(prs, half_span, tol):
                     "raw_sigma_ra_mas": robust_sigma([p["raw_dx"] for p in ps]),
                     "raw_sigma_dec_mas": robust_sigma([p["raw_dy"] for p in ps])}
     outliers = []
-    for p in clean:
+    for p in use:
         s = stats.get(g_bin(p["G"], tol["g_bins"]))
         if not s or s["n"] < tol["min_bin_count"] or not s["sigma_ra_mas"] or not s["sigma_dec_mas"]:
             continue
-        # a high proper-motion star moves during the tile's observing span: allow for it
-        pm = math.hypot(f(p["g"]["pmra"]), f(p["g"]["pmdec"]))
-        ex = pm * half_span
-        z = math.hypot((p["dx"] - mx) / math.hypot(s["sigma_ra_mas"], ex),
-                       (p["dy"] - my) / math.hypot(s["sigma_dec_mas"], ex))
+        z = math.hypot((p["dx"] - mx) / s["sigma_ra_mas"], (p["dy"] - my) / s["sigma_dec_mas"])
         p["pos_z"] = z
         if z > tol["position_outlier_sigma"]:
             outliers.append(p)
-    return {"n_clean": len(clean), "median_ra_mas": mx, "median_dec_mas": my,
-            "by_g_bin": dict(sorted(stats.items()))}, outliers
+    by_tier = {}
+    for t in ("A", "B"):
+        ps = [p for p in use if tier(p["e"], tol) == t]
+        by_tier[t] = {"n": len(ps), "sigma_ra_mas": robust_sigma([p["dx"] for p in ps]),
+                      "sigma_dec_mas": robust_sigma([p["dy"] for p in ps])}
+    # If the catalogue epoch we assumed is right, the residual does not depend on proper motion.
+    # The slope of residual against proper motion is the epoch error in years.
+    ep = {"ra_year": slope([f(p["g"]["pmra"]) for p in use], [p["dx"] for p in use]),
+          "dec_year": slope([f(p["g"]["pmdec"]) for p in use], [p["dy"] for p in use])}
+    return {"n_used": len(use), "median_ra_mas": mx, "median_dec_mas": my, "by_tier": by_tier,
+            "implied_epoch_offset": ep, "by_g_bin": dict(sorted(stats.items()))}, outliers
 
 
 # ---------------------------------------------------------------- C3 brightness (colour_fit tier)
 
-def vis_mag(e):
-    fl = f(e["flux_vis_psf"])
+def vis_mag(e, col="flux_vis_psf"):
+    """AB magnitude from a flux in microjansky (zero point 23.9, Euclid MER photometry cookbook)."""
+    fl = f(e.get(col))
     return AB_ZP_UJY - 2.5 * math.log10(fl) if fl and fl > 0 else None
 
 
@@ -222,33 +256,49 @@ def polyval(c, x):
     return sum(ci * x ** i for i, ci in enumerate(c))
 
 
-def brightness_check(prs, tol):
-    """Fit (VIS - G) against (BP - RP) on clean stars; the residual is the product."""
+def _colour_fit(prs, tol, col):
+    """Fit (VIS - G) against (BP - RP) on usable stars for one Euclid flux column."""
     cf = tol["colour_fit"]
     pts = []
     for p in prs:
-        g, bp, rp, v = p["G"], f(p["g"]["phot_bp_mean_mag"]), f(p["g"]["phot_rp_mean_mag"]), vis_mag(p["e"])
-        if None in (g, bp, rp, v) or not is_clean(p["e"], tol):
+        g, bp, rp, v = p["G"], f(p["g"]["phot_bp_mean_mag"]), f(p["g"]["phot_rp_mean_mag"]), vis_mag(p["e"], col)
+        if None in (g, bp, rp, v) or not usable(p["e"], tol):
             continue
-        p["bp_rp"], p["vis_minus_g"] = bp - rp, v - g
-        pts.append(p)
-    fit_set = [p for p in pts if cf["g_min"] <= p["G"] < cf["g_max"]
-               and cf["bp_rp_min"] <= p["bp_rp"] <= cf["bp_rp_max"]]
+        if cf["bp_rp_min"] <= bp - rp <= cf["bp_rp_max"]:
+            pts.append((p, bp - rp, v - g))
+    fit_set = [t for t in pts if cf["g_min"] <= t[0]["G"] < cf["g_max"]]
     if len(fit_set) < cf["min_stars"]:
-        return {"n_fit": len(fit_set), "fitted": False}, []
+        return None, pts, len(fit_set), 0, None
     use = fit_set
     for _ in range(cf["iterations"]):
-        c = polyfit([p["bp_rp"] for p in use], [p["vis_minus_g"] for p in use], cf["degree"])
-        res = [p["vis_minus_g"] - polyval(c, p["bp_rp"]) for p in fit_set]
-        fit_sigma = robust_sigma(res)
-        use = [p for p, r in zip(fit_set, res) if abs(r) <= cf["clip_sigma"] * fit_sigma]
+        c = polyfit([t[1] for t in use], [t[2] for t in use], cf["degree"])
+        res = [t[2] - polyval(c, t[1]) for t in fit_set]
+        sig = robust_sigma(res)
+        use = [t for t, r in zip(fit_set, res) if abs(r) <= cf["clip_sigma"] * sig]
+    return c, pts, len(fit_set), len(use), sig
+
+
+def brightness_check(prs, tol):
+    """Tier `colour_fit`: the residual about a fitted colour relation is the product.
+
+    The relation absorbs any constant offset (aperture losses included), so this tier tests
+    star-to-star consistency, not the absolute zero point.
+    """
+    col = tol["brightness_flux"]
+    c, pts, n_fit, n_used, sig = _colour_fit(prs, tol, col)
+    also = {}
+    for other in tol.get("brightness_flux_also", []):
+        oc, _, on, _, osig = _colour_fit(prs, tol, other)
+        also[other] = {"n_fit": on, "fit_sigma_mag": osig,
+                       "offset_at_bp_rp_1_mag": polyval(oc, 1.0) if oc else None}
+    if c is None:
+        return {"fitted": False, "flux_column": col, "n_fit": n_fit, "other_flux_columns": also}, []
     bins, outliers = {}, []
-    for p in pts:
-        if cf["bp_rp_min"] <= p["bp_rp"] <= cf["bp_rp_max"]:
-            p["vis_resid"] = p["vis_minus_g"] - polyval(c, p["bp_rp"])
-            b = g_bin(p["G"], tol["g_bins"])
-            if b:
-                bins.setdefault(b, []).append(p)
+    for p, colour, vmg in pts:
+        p["bp_rp"], p["vis_resid"] = colour, vmg - polyval(c, colour)
+        b = g_bin(p["G"], tol["g_bins"])
+        if b:
+            bins.setdefault(b, []).append(p)
     stats = {}
     for b, ps in bins.items():
         s = robust_sigma([p["vis_resid"] for p in ps])
@@ -259,5 +309,6 @@ def brightness_check(prs, tol):
             p["vis_z"] = (p["vis_resid"] - stats[b]["median_mag"]) / s
             if abs(p["vis_z"]) > tol["brightness_outlier_sigma"]:
                 outliers.append(p)
-    return {"fitted": True, "n_fit": len(fit_set), "n_used": len(use), "coefficients": c,
-            "fit_sigma_mag": fit_sigma, "by_g_bin": dict(sorted(stats.items()))}, outliers
+    return {"fitted": True, "flux_column": col, "n_fit": n_fit, "n_used": n_used, "coefficients": c,
+            "offset_at_bp_rp_1_mag": polyval(c, 1.0), "fit_sigma_mag": sig,
+            "other_flux_columns": also, "by_g_bin": dict(sorted(stats.items()))}, outliers

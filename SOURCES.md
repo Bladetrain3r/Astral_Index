@@ -1,15 +1,16 @@
 # Sources
 
 *Checked from the build environment on 2026-11-17. "Confirmed" means read from a live response or an official
-page that day. Anything else is marked "not confirmed". No fixtures are kept yet; G1 re-runs these checks and
-stores them with URL, time and SHA-256. Nothing here is a number the build invented.*
+page that day. Anything else is marked "not confirmed". The pilot tile's raw responses are kept in
+`fixtures/pilot/` with URL, query, time and SHA-256. Parts A and B record the first probe; where Part D
+(the documentation) or `LOG.md` (the pilot run) say something different, they are the later reading.*
 
 ## Summary
 
 | Source | Role in v1 | Access | Licence | Status |
 |---|---|---|---|---|
 | Gaia DR3 (ESA Gaia Archive) | Reference positions, proper motions, G/BP/RP, spectra flag | TAP, anonymous | CC BY-NC 3.0 IGO | Confirmed, queried |
-| Euclid DR1 (ESA Euclid Science Archive) | Star positions, VIS flux, Euclid's own Gaia match, tile dates | TAP, anonymous | CC BY-NC (version not read), non-commercial | Confirmed, queried |
+| Euclid DR1 (ESA Euclid Science Archive) | Star positions, VIS flux, Euclid's own Gaia match, tile dates | TAP, anonymous | CC BY-NC 3.0 IGO | Confirmed, queried |
 | GaiaXPy 2.1.5 | Predicted VIS brightness from Gaia spectra | Python package | BSD-3-Clause | `Euclid_VIS` filter listed; not run |
 | Aladin Lite | Sky viewer on the site | JS from npm CDN | LGPL-3.0-or-later | npm copy reachable; CDS host not |
 | CDS XMatch / VizieR TAP | Independent match oracle (optional) | HTTP | not read | **Unreachable from here** |
@@ -21,9 +22,10 @@ stores them with URL, time and SHA-256. Nothing here is a number the build inven
 2. **Both datasets are non-commercial.** See Licences. This rules out funding links unless ESA authorises.
 3. **No per-source position error and no per-source date in the Euclid catalogue.** Dates come per tile from
    `dr1.mosaic_product`. Position uncertainty has to be measured from the scatter.
-4. **The Gaia-spectrum brightness check has a narrow window.** In the pilot cone, Gaia spectra stop at
-   G ≈ 17 to 18, and most Gaia-matched Euclid sources carry non-zero quality flags (only 264 of 1,647 had
-   both flags zero). Whether enough bright, unsaturated stars remain is a G2 measurement.
+4. **The Gaia-spectrum brightness check has a narrow but usable window.** In the pilot tile Gaia spectra
+   stop at G ≈ 17 to 18. Only 264 of 1,647 Gaia-matched sources have both Euclid flags zero, and none of
+   those is brighter than G = 18. Once the flag bits were read (Part D), 238 stars with a Gaia spectrum turn
+   out to carry only harmless bits (blended, bright-star mask) and no saturation bit.
 5. **Proper-motion propagation visibly works.** Five pilot stars: raw Euclid−Gaia offsets of 30 to 160 mas
    shrink to 5 to 15 mas for the four unflagged ones (40 mas for the bright G = 14.6 star). Five stars is a
    smoke test, not a result.
@@ -120,6 +122,40 @@ Pilot residuals (Euclid − Gaia, mas; RA term multiplied by cos Dec; propagated
 
 The last row is bright enough to be saturated in VIS; that is an inference, not something read.
 
+# Part D: What the documentation says (G1, read 2026-11-17)
+
+DPDD = `https://euclid.esac.esa.int/dr/dr1/dpdd`; EDS = `https://euclid.dataspace.esa.int/public-eds-help`
+(the help pages behind the JavaScript portal); expsup = `https://euclid.esac.esa.int/dr/dr1/expsup`.
+
+| Topic | What was read | Where |
+|---|---|---|
+| `det_quality_flag` bits | "1 Source contaminated by close neighbors or has bad pixels; 2 Source blended with another one; 4 Source saturated; 8 Source close to a border; 128 Source within the VIS bright star mask; 256 Source within the NIR bright star mask; 512 Source within an extended object area; 1024 Source skipped by the deblending algorithm" | DPDD `/merdpd/merphotometrycookbook.html` |
+| `flag_vis` bits | "only use bits from 1 to 4", same meanings for 1, 2, 4, 8 | same |
+| Magnitudes | "ZP = 23.9 in all bands: m_AB = -2.5 × log10(flux_µJy) + 23.9" | same |
+| `gaia_id` | "Please interpret the description as 'The associated Gaia DR3 source id'" | EDS `/Ambiguous_Gaia_identifier_in_MER_catalogue_for_DR1.html` |
+| Coordinate frame and epoch | "ICRS reference system and the Gaia-CRF3 reference frame. The epoch of the coordinates is not explicitly declared… can be found in the <ReferenceObservationDateTime> tag"; it "varies from tile to tile" | EDS `/Epoch_of_source_coordinates_in_the_DR1_MER_catalogue_are_hidden.html` |
+| PSF flux of stars | "the PSF-fitting code was applying the source positional registration correction… in the wrong (opposite) direction… only really affected the measurements of point-like sources" | expsup `/Ch15.S3.SS2.html` |
+| Star selection | "heavily biased towards a high purity, and thus has a low completeness"; `POINT_LIKE_FLAG` is `POINT_LIKE_PROB > 0.96 AND DET_QUALITY_FLAG = 0`; bright stars: "select very bright (even saturated) sources at VIS AB magnitudes < 17" | DPDD `/merdpd/mermorphologycookbook.html` |
+| Empty values | Stored as NaN; the archive sorts NaN above every number | EDS `/Empty_values_in_catalogues_are_mistakenly_treated_as__NaN_.html` |
+| Tiles | "approximately 32' × 32'"; the catalogue "contains only sources within the MER tile core area"; cross-tile duplicates about 1 in 10⁵ | EDS `/Catalogues.html`, DPDD `mer_finalcatalog.html`, expsup `/Ch15.S3.SS7.html` |
+| Gaia anonymous limits | Sync time-out 60 s; 50,000 rows per query; results kept 24 h; queue limits are "for the total pool of anonymous users" | `https://www.cosmos.esa.int/web/gaia-users/archive/collaborate` |
+| Euclid limits | None documented beyond the capabilities document; anonymous jobs deleted after 3 days | EDS release notes |
+| Purpose of the services | "intended for scientific research and educational use and are not designed to support operational dependencies" | ESA terms |
+
+Not found in the documentation read: what `gaia_match_quality` measures and in which direction; the match
+radius Euclid used; a stated VIS astrometric accuracy; the VIS saturation magnitude; which of `DR1_R1` and
+`DR1_R2` is "DR1-Foundation"; any request-rate etiquette for either archive. Several explanatory-supplement
+chapters only point to the DR1 papers, which were not read.
+
+Effects on the build:
+
+- Coordinates are taken at the tile's `reference_observation_date_time`, not the middle of its observations.
+- Quality tiers use the flag bits: A (both flags zero), B (no contaminated, saturated or border bit), C (rest).
+- Brightness uses the aperture flux `flux_vis_2fwhm_aper`; the PSF flux is reported beside it because of the
+  known PSF issue.
+- The archive query bounds `flux_vis_psf` above to drop NaN rows (30,000 of 32,000 candidates in the pilot).
+- `CASE WHEN` and exponent literals such as `1e12` are rejected by the Euclid ADQL parser.
+
 # Part C: Tools
 
 - **GaiaXPy** 2.1.5 on PyPI, BSD-3-Clause. Its list of built-in filter systems includes `Euclid_VIS`, and
@@ -132,16 +168,21 @@ The last row is bright enough to be saturated in VIS; that is an inference, not 
 # Licences
 
 - **Gaia** (`https://www.cosmos.esa.int/web/gaia-users/license`): "Gaia data are distributed under the
-  CC BY-NC 3.0 IGO license." Credit lines per release are on `https://www.cosmos.esa.int/web/gaia-users/credits`;
-  the exact DR3 text is not yet copied.
-- **Euclid DR1** (`https://www.cosmos.esa.int/web/euclid/dr1-data-credits`): "open and free for
-  non-commercial use, provided that credit is given to 'ESA Euclid/Euclid Consortium/NASA/DR1-2026'".
-  Publications cite DOI `https://doi.org/10.57780/esa-d079c51`. The CC version string was cut off in the
-  text read.
+  CC BY-NC 3.0 IGO license." DR3 acknowledgement
+  (`https://gea.esac.esa.int/archive/documentation/GDR3/Miscellaneous/sec_credit_and_citation_instructions/`):
+  "This work has made use of data from the European Space Agency (ESA) mission Gaia
+  (https://www.cosmos.esa.int/gaia), processed by the Gaia Data Processing and Analysis Consortium (DPAC,
+  https://www.cosmos.esa.int/web/gaia/dpac/consortium). Funding for the DPAC has been provided by national
+  institutions, in particular the institutions participating in the Gaia Multilateral Agreement."
+- **Euclid DR1** (`https://www.cosmos.esa.int/web/euclid/dr1-data-credits`): "Euclid DR1 data is licensed
+  with the CC BY-NC 3.0 IGO licence", free for non-commercial use "provided that credit is given to 'ESA
+  Euclid/Euclid Consortium/NASA/DR1-2026'". Publications cite DOI `https://doi.org/10.57780/esa-d079c51`;
+  other uses carry "Data from ESA Euclid/Euclid Consortium/NASA/DR1-2026."
 - **ESA archive terms** (`https://www.cosmos.esa.int/web/esdc/terms-and-conditions`): "Prior to any
   commercial use ... including any use or application that directly or indirectly generates a financial
-  gain, a detailed request for authorisation/licence shall be made" to `data.licences@esa.int`. The terms
-  were read only around the words "commercial" and "automated"; a full read is a G1 item.
+  gain, a detailed request for authorisation/licence shall be made" to `data.licences@esa.int`. Also: the
+  user "shall not use Data or Data Products to state or imply the endorsement by ESA". Nothing on automated
+  access or on redistributing derived products beyond the licence itself.
 
-Consequence: derived tables we publish are adaptations of CC BY-NC data. They carry CC BY-NC, both credit
+Consequence: derived tables we publish are adaptations of CC BY-NC data. They carry CC BY-NC 3.0 IGO, both credit
 lines, and a statement that they are modified. The repo's MIT licence covers code only.

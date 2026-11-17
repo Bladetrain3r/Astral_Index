@@ -30,12 +30,14 @@ Not a catalogue, not a mirror, and not a discovery claim. An outlier here is a f
 **C1. Match audit.** Euclid's star catalogue already names a Gaia counterpart for each matched source
 (`gaia_id`, `gaia_match_quality`). We redo the match independently and compare:
 
-- Our match: Gaia position moved by its proper motion to the Euclid tile's observation date, then nearest
-  Euclid source within a radius set at G2.
+- Our match: Gaia position moved by its proper motion to the Euclid tile's coordinate epoch, then nearest
+  Euclid source within 0.5 arcsec.
 - Reported: agree; Euclid names a different Gaia source; Euclid names none and we find one; we find none and
-  Euclid names one; two Euclid sources claiming one Gaia source; Gaia sources in the tile with no Euclid source.
+  Euclid names one; two Euclid sources claiming one Gaia source (split into the usual visible-plus-infrared
+  double detection and anything else); Gaia sources in the tile with no Euclid source.
 
-**C2. Position residual.** Euclid position minus Gaia position propagated to the tile's observation date.
+**C2. Position residual.** Euclid position minus Gaia position propagated to the tile's coordinate epoch.
+Only stars in quality tier A (no Euclid flags) or B (no contaminated, saturated or border flag) are used.
 
 - Per tile: median offset in RA and Dec, and scatter by brightness bin. This is the calibration map.
 - Per source: residual divided by the measured scatter for its brightness bin. Large values go on the
@@ -43,15 +45,22 @@ Not a catalogue, not a mirror, and not a discovery claim. An outlier here is a f
 - Two limits, stated on the site. Euclid's astrometry is calibrated on Gaia, so the per-tile offset measures
   calibration, not independent agreement. The Euclid catalogue carries no per-source position error, so
   "beyond the errors" means beyond the scatter we measure, not beyond a published uncertainty.
+- Epoch audit: if the assumed epoch is right, the residual does not depend on proper motion. The slope of
+  one against the other is the epoch error in years, published per tile.
 
 **C3. Brightness residual (Euclid VIS band).** Two tiers, labelled on every figure:
 
 - `xp_synth`: Gaia's low-resolution spectrum turned into a predicted VIS brightness with GaiaXPy's
-  `Euclid_VIS` filter, compared with Euclid's measured `flux_vis_psf`. Only for stars that have a Gaia
-  spectrum (roughly G < 17.65). Risk: many of these are flagged or saturated in Euclid; G2 measures how many
-  survive.
-- `colour_fit`: for fainter stars, a relation from Gaia G and BP−RP to VIS brightness, fitted by us on clean
-  stars and published with its coefficients. Lower confidence; the residual scatter is the product.
+  `Euclid_VIS` filter, compared with Euclid's measured total flux. Only for stars that have a Gaia spectrum
+  (roughly G < 17.65). This is the only tier that tests the absolute level. Not built yet (gate G2b); the
+  pilot tile has 238 usable stars for it.
+- `colour_fit`: a relation from Gaia G and BP−RP to VIS brightness, fitted by us on usable stars and
+  published with its coefficients. It absorbs any constant offset, so it tests star-to-star consistency
+  only. Uses the aperture flux `flux_vis_2fwhm_aper`; the PSF flux is reported beside it because Euclid
+  documents a PSF-fitting problem for stars in DR1.
+
+Each outlier carries a `context` column of plain facts from both catalogues (Gaia fit quality poor, no Gaia
+proper motion, Gaia variable, Euclid says extended, Euclid binary flag). It is context, not a diagnosis.
 
 ## Change tracking
 
@@ -110,12 +119,12 @@ Search by Gaia source ID, Euclid object ID, or coordinates. Downloadable CSV on 
 
 G4 is "done" for v1. G5 and G6 are accretion.
 
-## Decisions for Ziggy
+## Decisions (Ziggy, 2026-11-17)
 
-1. **Non-commercial data.** Gaia and Euclid data are both CC BY-NC, and ESA's terms require authorisation
-   for any use that "directly or indirectly generates a financial gain". Proposal: code stays MIT; published
-   data files carry CC BY-NC and the credit lines; no funding or sponsor links on this repo or site.
-2. **Gaia DR4 lands in two weeks.** Proposal: build on DR3 now and treat DR4 as the first change event (G6).
-   The alternative is to wait and build on DR4 only, which loses the diff.
-3. **Per-source tables as Release assets,** not in git. Needs a session with a token, as in Four Corners.
-4. **Outlier wording.** Proposal: the site never says "error" or "discovery", only "disagrees by X".
+1. **Non-commercial data is fine.** The repo is MIT, nothing is sold. Code stays MIT; published data files
+   carry CC BY-NC 3.0 IGO and both credit lines; no funding or sponsor links on this repo or site.
+2. **Build on Gaia DR3 now; Gaia DR4 (2 December 2026) is the first change event** and the test of the
+   update pipeline (gate G6).
+3. **Outlier wording:** the site says "disagrees by X", never "error" or "discovery".
+
+Still open: per-source tables as Release assets rather than in git (needed from G5).

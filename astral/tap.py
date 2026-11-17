@@ -4,7 +4,7 @@ the sha256 of the stored file, so `sha256sum` checks it).
 
 A query already in the manifest for the same archive is read from disk, never re-fetched.
 """
-import csv, gzip, hashlib, io, json, os, time, urllib.parse, urllib.request
+import csv, gzip, hashlib, io, json, os, time, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone
 
 ARCHIVES = {
@@ -66,6 +66,13 @@ def _fetch(archive, query):
             return body
         except TapError:
             raise
+        except urllib.error.HTTPError as e:
+            if e.code < 500:                    # our mistake, not the archive's: do not retry
+                _last_call[0] = time.time()
+                raise TapError(f"{archive}: HTTP {e.code}: " + e.read().decode("utf-8", "replace")[:600])
+            err = e
+            _last_call[0] = time.time()
+            time.sleep(PAUSE_S * (2 ** (attempt + 1)))
         except Exception as e:                  # network or 5xx: back off and retry
             err = e
             _last_call[0] = time.time()
