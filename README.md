@@ -5,14 +5,19 @@ records, tile by tile, how far their positions and brightnesses differ, which so
 the measured scatter, and how that changes when either catalogue is re-released. Every number rebuilds from
 kept query snapshots.
 
-Status (2026-11-17): one pilot tile runs end to end and is reproducible offline (gate G2). Not live.
+Status (2026-11-17): 94 of about 9,500 tiles processed and reproducible offline; the explorer site is built
+but not deployed. See `GATES.md`.
+
+![The explorer's front page](docs/explorer.png)
 
 - `SPEC.md`: what is built and why
 - `GATES.md`: the build order and each gate's status
 - `SOURCES.md`: the archives, what was read from them, and the licences
 - `LOG.md`: the build log
 - `astral/`: the code (Python standard library only)
-- `fixtures/pilot/`: raw archive responses for the pilot tile, with a hash manifest
+- `fixtures/pilot/`, `snapshots/`: raw archive responses with hash manifests
+- `site/`: the explorer's pages; `python -m astral.site` assembles `_site/`
+- `data/watch/state.json`: what the archives looked like when last accepted (`python -m astral.watch`)
 - `data/tiles/<tile>/`: results per tile
 
 ```bash
@@ -20,7 +25,11 @@ python -m unittest discover -s tests
 ```
 
 ```bash
-python -m astral.run 102018694 --snap fixtures/pilot --offline
+python -m astral.batch --sample 100 --offline --redo
+```
+
+```bash
+python -m astral.site && python -m http.server -d _site 8000
 ```
 
 Not a catalogue, not a mirror, not a discovery claim.

@@ -34,6 +34,11 @@ page that day. Anything else is marked "not confirmed". The pilot tile's raw res
    lists `DR1_R1` and `DR1_R2`. Which label maps to Foundation is not confirmed.
 8. **The Euclid archive's ADQL rejects `CASE WHEN`.** Use `GROUP BY` on the flag columns instead.
 
+9. **Some tiles have an image but no catalogue rows.** 7 of 101 sampled tiles, including every sampled tile
+   whose only release is `DR1_R1` (`LOG.md` R2). The cause is not established.
+10. **The Gaia spectrum service failed on 2026-11-17** (`gea.esac.esa.int/data-server`: "Unable to create
+   connection to database", then time-outs). The TAP service was unaffected.
+
 ## Hosts unreachable from this environment
 
 `cdsxmatch.cds.unistra.fr` (connection reset), `cdsxmatch.u-strasbg.fr` (503), `tapvizier.cds.unistra.fr`

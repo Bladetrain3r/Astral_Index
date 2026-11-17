@@ -43,3 +43,50 @@ tile 102018694 against Gaia DR3. Snapshots in `fixtures/pilot/`, results in `dat
 
 **Open.** What `gaia_match_quality` measures; which release is "DR1-Foundation"; whether the 77 unmatched
 Gaia sources are near bright stars or tile gaps; the faint-bin offset; the `xp_synth` tier (G2b).
+
+## R2, 2026-11-17: a hundred tiles, the site, the watcher (G3 partly, G4 built)
+
+**Did.** Drew every 95th tile from the 9,547 wide tiles the archive lists (101 with the pilot), ran them
+(`astral/batch.py`), and kept every raw response under `snapshots/` (29 MB) so CI rebuilds all results
+offline. Built the static explorer (`site/`, assembled by `astral/site.py`), the release watcher
+(`astral/watch.py`, state in `data/watch/state.json`) and three workflows (tests, Pages, daily watch).
+
+**Sample.** 94 tiles processed; Galactic latitude 20° to 75° either side; coordinate epochs December 2023
+to May 2025. 7 sampled tiles have a VIS image in the archive but no rows in `dr1.mer_catalogue_wide_survey`
+(`data/index/failed.csv`): all 5 sampled tiles whose only release is `DR1_R1`, and 2 `DR1_R2` tiles near
+RA 53, Dec −26 to −30. Why is not established; the two R2 tiles are close to the Fornax deep field. 4 of
+the 94 are edge tiles with under 100 usable stars.
+
+**Numbers over the 94 tiles** (108,007 Gaia–Euclid pairs, 83,196 usable stars):
+
+| Check | Outcome |
+|---|---|
+| Match audit | 108,756 agree; 0 where Euclid and we link different sources; 9 Euclid-only; 1,495 where we find a source Euclid does not link; 9,180 Gaia sources with no Euclid source in 0.5 arcsec; 4,593 VIS-plus-infrared double claims; 7 other double claims |
+| Position scatter per axis, per tile | 6.0 to 9.0 mas, median 7.2 |
+| Tile median offset | up to 9 mas in either axis; medians −1.9 mas RA, −0.3 mas Dec |
+| Implied epoch error | medians −0.06 yr (RA), −0.03 yr (Dec); extremes −0.30 to +0.39 yr |
+| Brightness scatter about the colour relation | median 0.030 mag (aperture flux); PSF flux 1.62 times larger in the median tile |
+| Outliers at 5 sigma | 3,271 position (3.9% of usable), 2,185 brightness |
+
+**What the first outlier list was made of.** Before the change below there were 6,970 brightness outliers.
+About 70% were sources Euclid classes as extended or that Gaia gives no proper motion, and nine in ten
+were brighter in Euclid: compact galaxies in the Gaia catalogue, as in the pilot. Of sources off in both
+position and brightness, 637 of 1,009 have a poor Gaia single-star fit (RUWE above 1.4).
+
+**Decided.**
+
+- Brightness statistics and outliers are for star-like sources only: Gaia gives a proper motion and Euclid
+  does not call it extended. The rest (15,892 pairs) are counted per tile as `not_star_like`.
+- Snapshots for these tiles live in git. The full footprint will not (about 2.5 GB at this rate).
+- A tile with an image but no catalogue rows is recorded, not treated as an outage.
+
+**Not done, and why.**
+
+- `xp_synth` tier (G2b): GaiaXPy installs in a clean virtual environment and lists `Euclid_VIS`, but the Gaia
+  spectrum service (`gea.esac.esa.int/data-server`) answered "Unable to create connection to database" and
+  then timed out, three times. About 240 stars per tile would qualify. Retry another day.
+- The by-eye look at 50 outliers (part of G3) and freezing the tolerances. A 3.9% position outlier rate at
+  "5 sigma" says the tails are heavy, most likely blends admitted by tier B; that needs images to judge.
+- A relation fitted over all tiles instead of per tile.
+- Pages is not live: the workflow deploys from `main`, and Pages must be switched on in the repo settings.
+- Aladin Lite on the tile page loads on a button press; it could not be exercised from the build container.
