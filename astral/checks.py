@@ -88,6 +88,16 @@ def usable(e, tol):
     return tier(e, tol) in ("A", "B")
 
 
+def star_like(p):
+    """Gaia gives it a proper motion and Euclid does not call it extended.
+
+    Gaia sources without a proper motion that Euclid sees as extended are mostly compact galaxies;
+    they are counted as their own class and kept out of the brightness statistics for stars.
+    """
+    plp = f(p["e"]["point_like_prob"])
+    return p["had_pm"] and not (plp is not None and plp < 0.5)
+
+
 def slope(xs, ys):
     """Least-squares slope of y on x about the medians, ignoring points beyond 5 sigma in y."""
     if len(xs) < 20:
@@ -262,7 +272,7 @@ def _colour_fit(prs, tol, col):
     pts = []
     for p in prs:
         g, bp, rp, v = p["G"], f(p["g"]["phot_bp_mean_mag"]), f(p["g"]["phot_rp_mean_mag"]), vis_mag(p["e"], col)
-        if None in (g, bp, rp, v) or not usable(p["e"], tol):
+        if None in (g, bp, rp, v) or not usable(p["e"], tol) or not star_like(p):
             continue
         if cf["bp_rp_min"] <= bp - rp <= cf["bp_rp_max"]:
             pts.append((p, bp - rp, v - g))

@@ -1,0 +1,2 @@
+gaia_source_id,euclid_object_id,g_mag,bp_rp,ra_euclid,dec_euclid,d_ra_mas,d_dec_mas,raw_d_ra_mas,raw_d_dec_mas,pos_z,vis_mag,vis_resid_mag,vis_z,tier,point_like_prob,flag_vis,det_quality_flag,gaia_match_quality,pmra,pmdec,ruwe,gaia_variable,has_gaia_spectrum,context
+5570513690321979904,-983191342407217178,20.438,,98.31913428284852,-40.721717812171775,31.8,-143.53,45.86,-133.08,11.51,21.994,,,A,0.12461786717176437,0,0,0.021613379940390587,1.518265696035931,1.1285151692506876,1.0803163,NOT_AVAILABLE,false,euclid_extended

@@ -1,0 +1,49 @@
+{
+ "euclid_catalogue_columns": {
+  "count": 478,
+  "sha256": "e2e7fbcc09288b4458df90a0ccd44480617fcc53b166f5531da4d812ab272df7"
+ },
+ "euclid_known_issues": {
+  "chars": 999,
+  "sha256": "69c2605909b9614a5dcca818b8ec743232c2bb6070a3d8a43587bb425056befb"
+ },
+ "euclid_releases": [
+  "DR1_R1 | 1 | DATA_RELEASE",
+  "DR1_R2 | 2 | DATA_RELEASE",
+  "PV | 0 | ON_THE_FLY",
+  "SURVEY | 0 | ON_THE_FLY",
+  "WFE-RETRIEVAL-1 | 0 | ON_THE_FLY"
+ ],
+ "euclid_schemas": [
+  "catalogue",
+  "dr1",
+  "ivoa",
+  "job_upload",
+  "public",
+  "q1",
+  "tap_config",
+  "tap_schema",
+  "tap_upload"
+ ],
+ "euclid_vis_tiles": [
+  "DR1_R1 | 2007",
+  "DR1_R2 | 9376"
+ ],
+ "gaia_schemas": [
+  "external",
+  "gaiadr1",
+  "gaiadr2",
+  "gaiadr3",
+  "gaiaedr3",
+  "gaiafpr",
+  "job_upload",
+  "public",
+  "tap_config",
+  "tap_schema",
+  "tap_upload"
+ ],
+ "gaia_source_columns": {
+  "count": 152,
+  "sha256": "36eb14846da7338e834f32907bf5d3d080b36003370f0fd0a5f1fec8e178ee3f"
+ }
+}

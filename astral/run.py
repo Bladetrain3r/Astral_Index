@@ -61,6 +61,7 @@ def run_tile(tile, snap, out, offline=False, tol_path=None):
                    "pairs": len(prs),
                    "pairs_tier_a": sum(1 for p in prs if checks.tier(p["e"], tol) == "A"),
                    "pairs_tier_b": sum(1 for p in prs if checks.tier(p["e"], tol) == "B"),
+                   "pairs_not_star_like": sum(1 for p in prs if not checks.star_like(p)),
                    "pairs_with_gaia_spectrum": sum(1 for p in prs if p["g"]["has_xp_continuous"] == "true"),
                    "pairs_usable_with_gaia_spectrum": sum(
                        1 for p in prs if p["g"]["has_xp_continuous"] == "true" and checks.usable(p["e"], tol))},

@@ -1,0 +1,8 @@
+tile_index,error,detail
+102004576,ValueError,tile 102004576: no Euclid rows
+102040314,ValueError,tile 102040314: no Euclid rows
+102041033,ValueError,tile 102041033: no Euclid rows
+102043445,ValueError,tile 102043445: no Euclid rows
+102046762,ValueError,tile 102046762: no Euclid rows
+102092268,ValueError,tile 102092268: no Euclid rows
+102141384,ValueError,tile 102141384: no Euclid rows

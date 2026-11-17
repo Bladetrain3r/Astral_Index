@@ -92,13 +92,13 @@
    },
    "19-20": {
     "median_mag": -0.004,
-    "n": 291,
-    "sigma_mag": 0.0323
+    "n": 290,
+    "sigma_mag": 0.0322
    },
    "20-21.5": {
-    "median_mag": -0.1033,
-    "n": 537,
-    "sigma_mag": 0.1103
+    "median_mag": -0.0718,
+    "n": 365,
+    "sigma_mag": 0.0782
    }
   },
   "coefficients": [
@@ -109,18 +109,18 @@
   "fit_sigma_mag": 0.0282,
   "fitted": true,
   "flux_column": "flux_vis_2fwhm_aper",
-  "n_fit": 480,
+  "n_fit": 479,
   "n_used": 456,
   "offset_at_bp_rp_1_mag": 0.0843,
   "other_flux_columns": {
    "flux_detection_total": {
-    "fit_sigma_mag": 0.0256,
-    "n_fit": 480,
+    "fit_sigma_mag": 0.0255,
+    "n_fit": 479,
     "offset_at_bp_rp_1_mag": -0.1061
    },
    "flux_vis_psf": {
-    "fit_sigma_mag": 0.0474,
-    "n_fit": 480,
+    "fit_sigma_mag": 0.047,
+    "n_fit": 479,
     "offset_at_bp_rp_1_mag": -0.0347
    }
   }
@@ -135,6 +135,7 @@
   "euclid_with_gaia_id": 1647,
   "gaia_in_box": 1717,
   "pairs": 1564,
+  "pairs_not_star_like": 213,
   "pairs_tier_a": 262,
   "pairs_tier_b": 1172,
   "pairs_usable_with_gaia_spectrum": 238,
@@ -143,7 +144,7 @@
  "epoch_half_span_year": 0.257,
  "epoch_year": 2024.1599,
  "outliers": {
-  "brightness": 79,
+  "brightness": 20,
   "position": 39
  },
  "tile_index": 102018694,

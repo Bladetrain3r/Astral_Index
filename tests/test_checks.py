@@ -96,5 +96,17 @@ class Reproduce(unittest.TestCase):
                 run.run_tile(PILOT, os.path.join(d, "s"), os.path.join(d, "o"), offline=True)
 
 
+class Watch(unittest.TestCase):
+    def test_new_schema_is_reported_and_outage_is_not(self):
+        from astral import watch
+        old = {"gaia_schemas": ["gaiadr3"], "euclid_releases": ["DR1_R2 | 2"], "cols": {"count": 1, "sha256": "a"}}
+        new = {"gaia_schemas": ["gaiadr3", "gaiadr4"], "euclid_releases": {"unreachable": "URLError"},
+               "cols": {"count": 2, "sha256": "b"}}
+        lines = watch.diff(old, new)
+        self.assertEqual(len(lines), 2)
+        self.assertIn("new `gaiadr4`", lines[1])
+        self.assertEqual(watch.diff(old, old), [])
+
+
 if __name__ == "__main__":
     unittest.main()
