@@ -1,0 +1,143 @@
+{
+ "box_deg": {
+  "dec_max": -50.7474,
+  "dec_min": -51.2549,
+  "ra_max": 80.5863,
+  "ra_min": 79.7762
+ },
+ "c1_match_audit": {
+  "agree": 1577,
+  "differ": 0,
+  "duplicate_claim": 66,
+  "euclid_names_unknown_gaia": 0,
+  "gaia_unmatched": 93,
+  "only_euclid": 0,
+  "only_ours": 21
+ },
+ "c2_position": {
+  "by_g_bin": {
+   "18-19": {
+    "n": 3,
+    "raw_sigma_dec_mas": 6.8093,
+    "raw_sigma_ra_mas": 36.7759,
+    "sigma_dec_mas": 4.5282,
+    "sigma_ra_mas": 2.3411
+   },
+   "19-20": {
+    "n": 76,
+    "raw_sigma_dec_mas": 48.009,
+    "raw_sigma_ra_mas": 22.8367,
+    "sigma_dec_mas": 5.6152,
+    "sigma_ra_mas": 7.0813
+   },
+   "20-21.5": {
+    "n": 115,
+    "raw_sigma_dec_mas": 49.7087,
+    "raw_sigma_ra_mas": 30.773,
+    "sigma_dec_mas": 11.0896,
+    "sigma_ra_mas": 10.8554
+   }
+  },
+  "median_dec_mas": -3.5156,
+  "median_ra_mas": 1.249,
+  "n_clean": 194
+ },
+ "c3_brightness_colour_fit": {
+  "by_g_bin": {
+   "18-19": {
+    "median_mag": -0.0295,
+    "n": 3,
+    "sigma_mag": 0.0314
+   },
+   "19-20": {
+    "median_mag": 0.0034,
+    "n": 70,
+    "sigma_mag": 0.05
+   },
+   "20-21.5": {
+    "median_mag": -0.1107,
+    "n": 152,
+    "sigma_mag": 0.0862
+   }
+  },
+  "coefficients": [
+   0.4544,
+   -0.5714,
+   0.0995
+  ],
+  "fit_sigma_mag": 0.05,
+  "fitted": true,
+  "n_fit": 73,
+  "n_used": 71
+ },
+ "catalogues": {
+  "euclid": "dr1.mer_catalogue_wide_survey",
+  "euclid_releases": [
+   "DR1_R2"
+  ],
+  "gaia": "gaiadr3.gaia_source"
+ },
+ "counts": {
+  "euclid_candidates": 32125,
+  "euclid_with_gaia_id": 1647,
+  "gaia_in_box": 1736,
+  "pairs": 1647,
+  "pairs_clean": 232,
+  "pairs_clean_with_gaia_spectrum": 1,
+  "pairs_with_gaia_spectrum": 443
+ },
+ "epoch_half_span_year": 0.257,
+ "epoch_year": 2024.4167,
+ "outliers": {
+  "brightness": 5,
+  "position": 4
+ },
+ "tile_index": 102018694,
+ "tolerances": {
+  "brightness_outlier_sigma": 5.0,
+  "candidate_flux_vis_ujy": 9.0,
+  "clean": {
+   "det_quality_flag": 0,
+   "flag_vis": 0,
+   "point_like_prob_min": 0.9,
+   "spurious_flag": 0
+  },
+  "colour_fit": {
+   "bp_rp_max": 2.5,
+   "bp_rp_min": 0.3,
+   "clip_sigma": 3.0,
+   "degree": 2,
+   "g_max": 20.0,
+   "g_min": 17.5,
+   "iterations": 5,
+   "min_stars": 50
+  },
+  "edge_margin_arcsec": 10.0,
+  "g_bins": [
+   [
+    10,
+    17
+   ],
+   [
+    17,
+    18
+   ],
+   [
+    18,
+    19
+   ],
+   [
+    19,
+    20
+   ],
+   [
+    20,
+    21.5
+   ]
+  ],
+  "gaia_box_margin_arcsec": 5.0,
+  "match_radius_arcsec": 0.5,
+  "min_bin_count": 20,
+  "position_outlier_sigma": 5.0
+ }
+}
