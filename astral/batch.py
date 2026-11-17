@@ -7,7 +7,7 @@ A tile whose summary already exists is skipped unless --redo. A tile that fails 
 rows lands there too); five archive failures in a row stop the run.
 """
 import argparse, csv, json, os, sys
-from . import run, tiles, tap
+from . import checks, run, tiles, tap
 
 HERE = run.HERE
 PILOT = 102018694
@@ -16,7 +16,8 @@ COLS = ["tile_index", "release_name", "ra", "dec", "gal_lat", "reference_date", 
         "duplicate_vis_nir", "duplicate_other", "gaia_unmatched", "median_ra_mas", "median_dec_mas",
         "sigma_ra_mas", "sigma_dec_mas", "epoch_offset_ra_year", "epoch_offset_dec_year",
         "brightness_fitted", "brightness_sigma_mag", "brightness_offset_mag", "psf_sigma_mag",
-        "outliers_position", "outliers_brightness"]
+        "outliers_position", "outliers_brightness", "tile_brightness_offset_mag",
+        "tile_brightness_offset_err_mag"]
 
 
 def index_row(t, s):
@@ -37,14 +38,63 @@ def index_row(t, s):
             s["outliers"]["position"], s["outliers"]["brightness"]]
 
 
+def global_relation(tile_ids, out, tol):
+    """One colour relation over every tile, and each tile's median offset from it.
+
+    The per-tile fits absorb a tile's zero point; this is what shows it. Uses the same stars as the
+    per-tile fit (usable, star-like, inside the fit's brightness and colour range).
+    """
+    cf = tol["colour_fit"]
+    per_tile, xs, ys = {}, [], []
+    for k in tile_ids:
+        p = os.path.join(out, k, "sources.csv")
+        if not os.path.exists(p):
+            continue
+        pts = []
+        with open(p) as fh:
+            for r in csv.DictReader(fh):
+                if r["vis_resid_mag"] == "" or not (cf["g_min"] <= float(r["g_mag"]) < cf["g_max"]):
+                    continue
+                pts.append((float(r["bp_rp"]), float(r["vis_mag"]) - float(r["g_mag"])))
+        per_tile[k] = pts
+        xs += [a for a, _ in pts]
+        ys += [b for _, b in pts]
+    if len(xs) < cf["min_stars"]:
+        return None, {}
+    use = list(zip(xs, ys))
+    for _ in range(cf["iterations"]):
+        c = checks.polyfit([a for a, _ in use], [b for _, b in use], cf["degree"])
+        res = [b - checks.polyval(c, a) for a, b in zip(xs, ys)]
+        sig = checks.robust_sigma(res)
+        use = [(a, b) for a, b, r in zip(xs, ys, res) if abs(r) <= cf["clip_sigma"] * sig]
+    offsets = {}
+    for k, pts in per_tile.items():
+        if len(pts) >= cf["min_stars"]:
+            r = [b - checks.polyval(c, a) for a, b in pts]
+            offsets[k] = (checks.median(r), checks.robust_sigma(r) / len(r) ** 0.5)
+    rel = {"flux_column": tol["brightness_flux"], "coefficients": [round(x, 5) for x in c],
+           "n_stars": len(xs), "n_used": len(use), "sigma_mag": round(sig, 4), "n_tiles": len(offsets),
+           "g_range": [cf["g_min"], cf["g_max"]], "bp_rp_range": [cf["bp_rp_min"], cf["bp_rp_max"]],
+           "tile_offset_sigma_mag": round(checks.robust_sigma([v[0] for v in offsets.values()]), 4)}
+    return rel, offsets
+
+
 def write_index(todo, out, index_dir):
     os.makedirs(index_dir, exist_ok=True)
+    with open(os.path.join(HERE, "tolerances.json")) as fh:
+        tol = json.load(fh)
+    rel, offsets = global_relation([t["tile_index"] for t in todo], out, tol)
+    if rel:
+        with open(os.path.join(index_dir, "colour_relation.json"), "w") as fh:
+            json.dump(rel, fh, indent=1, sort_keys=True)
+            fh.write("\n")
     rows = []
     for t in todo:
         p = os.path.join(out, t["tile_index"], "summary.json")
         if os.path.exists(p):
             with open(p) as fh:
-                rows.append(index_row(t, json.load(fh)))
+                o = offsets.get(t["tile_index"], (None, None))
+                rows.append(index_row(t, json.load(fh)) + [o[0], o[1]])
     with open(os.path.join(index_dir, "tiles.csv"), "w", newline="") as fh:
         w = csv.writer(fh, lineterminator="\n")
         w.writerow(COLS)

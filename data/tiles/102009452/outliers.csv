@@ -1,1 +1,1 @@
-gaia_source_id,euclid_object_id,g_mag,bp_rp,ra_euclid,dec_euclid,d_ra_mas,d_dec_mas,raw_d_ra_mas,raw_d_dec_mas,pos_z,vis_mag,vis_resid_mag,vis_z,tier,point_like_prob,flag_vis,det_quality_flag,gaia_match_quality,pmra,pmdec,ruwe,gaia_variable,has_gaia_spectrum,context
+gaia_source_id,euclid_object_id,g_mag,bp_rp,ra_euclid,dec_euclid,d_ra_mas,d_dec_mas,raw_d_ra_mas,raw_d_dec_mas,gaia_sigma_mas,pos_z,vis_mag,vis_resid_mag,vis_z,tier,point_like_prob,flag_vis,det_quality_flag,gaia_match_quality,pmra,pmdec,ruwe,gaia_variable,has_gaia_spectrum,context

@@ -191,7 +191,11 @@ def pairs(euclid, gaia, epoch):
         dx, dy = offset_mas(float(e["right_ascension"]), float(e["declination"]), ra, dec)
         rx, ry = offset_mas(float(e["right_ascension"]), float(e["declination"]),
                             float(g["ra"]), float(g["dec"]))
-        out.append({"e": e, "g": g, "dx": dx, "dy": dy, "raw_dx": rx, "raw_dy": ry,
+        dt = epoch - float(g["ref_epoch"])
+        # Gaia's own uncertainty at the tile epoch: position error plus proper-motion error times years
+        gsx = math.hypot(f(g["ra_error"]) or 0.0, (f(g["pmra_error"]) or 0.0) * dt)
+        gsy = math.hypot(f(g["dec_error"]) or 0.0, (f(g["pmdec_error"]) or 0.0) * dt)
+        out.append({"e": e, "g": g, "dx": dx, "dy": dy, "raw_dx": rx, "raw_dy": ry, "gsx": gsx, "gsy": gsy,
                     "had_pm": had_pm, "G": f(g["phot_g_mean_mag"])})
     return out
 
@@ -208,17 +212,24 @@ def position_check(prs, tol):
             bins.setdefault(b, []).append(p)
     stats = {}
     for b, ps in bins.items():
-        stats[b] = {"n": len(ps),
-                    "sigma_ra_mas": robust_sigma([p["dx"] for p in ps]),
-                    "sigma_dec_mas": robust_sigma([p["dy"] for p in ps]),
+        sx, sy = robust_sigma([p["dx"] for p in ps]), robust_sigma([p["dy"] for p in ps])
+        gx, gy = median([p["gsx"] ** 2 for p in ps]), median([p["gsy"] ** 2 for p in ps])
+        fl = tol["euclid_floor_min_mas"]
+        stats[b] = {"n": len(ps), "sigma_ra_mas": sx, "sigma_dec_mas": sy,
                     "raw_sigma_ra_mas": robust_sigma([p["raw_dx"] for p in ps]),
-                    "raw_sigma_dec_mas": robust_sigma([p["raw_dy"] for p in ps])}
+                    "raw_sigma_dec_mas": robust_sigma([p["raw_dy"] for p in ps]),
+                    "gaia_sigma_ra_mas": math.sqrt(gx), "gaia_sigma_dec_mas": math.sqrt(gy),
+                    # what is left once Gaia's stated uncertainty is taken out: Euclid's share
+                    "euclid_sigma_ra_mas": math.sqrt(max((sx or 0) ** 2 - gx, fl ** 2)),
+                    "euclid_sigma_dec_mas": math.sqrt(max((sy or 0) ** 2 - gy, fl ** 2))}
     outliers = []
     for p in use:
         s = stats.get(g_bin(p["G"], tol["g_bins"]))
-        if not s or s["n"] < tol["min_bin_count"] or not s["sigma_ra_mas"] or not s["sigma_dec_mas"]:
+        if not s or s["n"] < tol["min_bin_count"]:
             continue
-        z = math.hypot((p["dx"] - mx) / s["sigma_ra_mas"], (p["dy"] - my) / s["sigma_dec_mas"])
+        # each star is judged against Euclid's share for its brightness plus its own Gaia uncertainty
+        z = math.hypot((p["dx"] - mx) / math.hypot(s["euclid_sigma_ra_mas"], p["gsx"]),
+                       (p["dy"] - my) / math.hypot(s["euclid_sigma_dec_mas"], p["gsy"]))
         p["pos_z"] = z
         if z > tol["position_outlier_sigma"]:
             outliers.append(p)

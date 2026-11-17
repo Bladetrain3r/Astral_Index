@@ -40,8 +40,10 @@ Not a catalogue, not a mirror, and not a discovery claim. An outlier here is a f
 Only stars in quality tier A (no Euclid flags) or B (no contaminated, saturated or border flag) are used.
 
 - Per tile: median offset in RA and Dec, and scatter by brightness bin. This is the calibration map.
-- Per source: residual divided by the measured scatter for its brightness bin. Large values go on the
-  outlier list.
+- Per source: residual divided by what is expected for that star, which is its own Gaia uncertainty carried
+  to the tile epoch (position error plus proper-motion error times the years) added to Euclid's share of the
+  scatter for its brightness. Euclid's share is the measured scatter with Gaia's part taken out. Beyond
+  5 goes on the outlier list.
 - Two limits, stated on the site. Euclid's astrometry is calibrated on Gaia, so the per-tile offset measures
   calibration, not independent agreement. The Euclid catalogue carries no per-source position error, so
   "beyond the errors" means beyond the scatter we measure, not beyond a published uncertainty.
@@ -54,13 +56,17 @@ Only stars in quality tier A (no Euclid flags) or B (no contaminated, saturated 
   `Euclid_VIS` filter, compared with Euclid's measured total flux. Only for stars that have a Gaia spectrum
   (roughly G < 17.65). This is the only tier that tests the absolute level. Not built yet (gate G2b); the
   pilot tile has 238 usable stars for it.
-- `colour_fit`: a relation from Gaia G and BP−RP to VIS brightness, fitted by us on usable stars and
-  published with its coefficients. It absorbs any constant offset, so it tests star-to-star consistency
-  only. Uses the aperture flux `flux_vis_2fwhm_aper`; the PSF flux is reported beside it because Euclid
-  documents a PSF-fitting problem for stars in DR1.
+- `colour_fit`: a relation from Gaia G and BP−RP to VIS brightness, fitted by us on usable star-like
+  sources and published with its coefficients. Per tile it tests star-to-star consistency. One relation
+  over all tiles (`data/index/colour_relation.json`) gives each tile's offset, which tests how uniform
+  Euclid's zero point is. Neither tests the absolute level. Uses Euclid's total flux
+  `flux_detection_total`; the PSF and 2-FWHM aperture fluxes are reported beside it (`LOG.md` R3 says why).
+- Star-like means Gaia gives a proper motion and Euclid does not call the source extended. The rest are
+  mostly compact galaxies; they are counted per tile and left out of the brightness check.
 
 Each outlier carries a `context` column of plain facts from both catalogues (Gaia fit quality poor, no Gaia
-proper motion, Gaia variable, Euclid says extended, Euclid binary flag). It is context, not a diagnosis.
+proper motion, Gaia variable, another source within 3 arcsec in either catalogue, Euclid says extended,
+Euclid binary flag). It is context, not a diagnosis.
 
 ## Change tracking
 

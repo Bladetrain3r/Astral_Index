@@ -96,6 +96,15 @@ class Reproduce(unittest.TestCase):
                 run.run_tile(PILOT, os.path.join(d, "s"), os.path.join(d, "o"), offline=True)
 
 
+class Neighbours(unittest.TestCase):
+    def test_nearest_other_point_within_radius(self):
+        a = 1 / 3600.0
+        got = run.neighbours([(10.0, 0.0), (10.0, 2 * a), (10.0, 30 * a)], 3.0)
+        self.assertAlmostEqual(got[0], 2.0, places=3)
+        self.assertAlmostEqual(got[1], 2.0, places=3)
+        self.assertIsNone(got[2])
+
+
 class Watch(unittest.TestCase):
     def test_new_schema_is_reported_and_outage_is_not(self):
         from astral import watch

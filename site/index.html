@@ -30,9 +30,11 @@
     <p><b>Match audit.</b> Euclid's catalogue names a Gaia counterpart for each star. We redo the match independently
     (Gaia position moved by its proper motion to the tile's coordinate epoch, nearest Euclid source within 0.5 arcsec) and count where the two differ.</p>
     <p><b>Position.</b> Euclid position minus propagated Gaia position. Euclid's astrometry is calibrated on Gaia, so a tile's median offset
-    measures calibration, not independent agreement. Euclid publishes no per-source position error, so an outlier is a star beyond 5 times the scatter measured for its brightness.</p>
-    <p><b>Brightness.</b> A colour relation from Gaia G and BP−RP to Euclid VIS is fitted per tile; the residual about it is the product. It tests star-to-star consistency, not the absolute level.</p>
-    <p><b>Outliers are flags, not findings.</b> Each carries context from both catalogues (poor Gaia fit, no Gaia proper motion, Euclid says extended) and nothing here has been checked by eye unless it says so.</p>
+    measures calibration, not independent agreement. Euclid publishes no per-source position error, so each star is judged against two things added together:
+    its own Gaia uncertainty carried to the tile epoch, and Euclid's share of the scatter measured for stars of its brightness. An outlier is beyond 5 times that.</p>
+    <p><b>Brightness.</b> A colour relation from Gaia G and BP−RP to Euclid VIS (total flux) is fitted per tile; the residual about it is the product. It tests star-to-star consistency.
+    One relation fitted over all tiles gives each tile's offset, which tests how uniform the zero point is. Neither tests the absolute level. Sources Gaia gives no proper motion, or Euclid calls extended, are counted separately and left out.</p>
+    <p><b>Outliers are flags, not findings.</b> Each carries context from both catalogues (poor Gaia fit, a close neighbour, Gaia variable, Euclid says extended) and nothing here has been checked by eye unless it says so.</p>
   </div>
 </main>
 <footer id="foot"></footer>
@@ -43,8 +45,9 @@ const METRICS = [
   { k: "sigma_pos", h: "Position scatter (mas)", d: 1, note: "Per-axis scatter of Euclid minus propagated Gaia positions, over usable stars." },
   { k: "offset", h: "Median offset (mas)", d: 1, note: "Length of the tile's median position offset. Measures astrometric calibration against Gaia." },
   { k: "epoch_abs", h: "Implied epoch error (yr)", d: 2, note: "Slope of position residual against proper motion. Zero if the documented coordinate epoch is right." },
-  { k: "brightness_sigma_mag", h: "Brightness scatter (mag)", d: 3, note: "Scatter about the fitted colour relation, aperture flux." },
-  { k: "psf_ratio", h: "PSF / aperture scatter", d: 2, note: "How much noisier Euclid's PSF flux is than its aperture flux for stars. Euclid documents a PSF-fitting issue in DR1." },
+  { k: "brightness_sigma_mag", h: "Brightness scatter (mag)", d: 3, note: "Scatter about the tile's fitted colour relation, Euclid total flux." },
+  { k: "zp_mmag", h: "Tile brightness offset (mmag)", d: 1, note: "Each tile's median offset from one colour relation fitted over all tiles: how well Euclid's VIS zero point holds from tile to tile, as seen through Gaia." },
+  { k: "psf_ratio", h: "PSF / total-flux scatter", d: 2, note: "How much noisier Euclid's PSF flux is than its total flux for stars. Euclid documents a PSF-fitting issue in DR1." },
   { k: "unmatched_frac", h: "Gaia sources without a Euclid match (%)", d: 1, note: "Share of Gaia sources inside the tile with no Euclid source within 0.5 arcsec." },
   { k: "outlier_frac", h: "Outliers (% of usable)", d: 1, note: "Position plus brightness outliers at 5 sigma, as a share of usable stars." },
   { k: "usable", h: "Usable stars", d: 0, note: "Matched stars with no contaminated, saturated or border flag in Euclid." },
@@ -59,6 +62,7 @@ function derive(t) {
   const inside = n("agree") + n("differ") + n("only_euclid") + n("only_ours") + n("gaia_unmatched");
   t.unmatched_frac = inside ? 100 * n("gaia_unmatched") / inside : null;
   t.outlier_frac = n("usable") >= 100 ? 100 * (n("outliers_position") + n("outliers_brightness")) / n("usable") : null;
+  t.zp_mmag = n("tile_brightness_offset_mag") == null ? null : 1000 * n("tile_brightness_offset_mag");
   t.usable = n("usable"); t.thin = t.usable < 100;
   ["brightness_sigma_mag"].forEach(k => t[k] = n(k));
   if (t.thin) ["sigma_pos", "offset", "epoch_abs", "brightness_sigma_mag", "psf_ratio"].forEach(k => t[k] = null);

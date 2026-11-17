@@ -90,3 +90,61 @@ position and brightness, 637 of 1,009 have a poor Gaia single-star fit (RUWE abo
 - A relation fitted over all tiles instead of per tile.
 - Pages is not live: the workflow deploys from `main`, and Pages must be switched on in the repo settings.
 - Aladin Lite on the tile page loads on a button press; it could not be exercised from the build container.
+
+## R3, 2026-11-17: what the outliers are; method v1 frozen (G3)
+
+**Did.** Measured the position-outlier rate against properties of the star, changed the position test,
+fitted one colour relation over all tiles, and compared Euclid's three flux measures between hemispheres.
+
+**Position outliers, before the change** (40 tiles, 35,958 usable stars, 3.9% flagged):
+
+| Property of the star | Share flagged |
+|---|---|
+| Gaia RUWE above 1.4 | 42.6% (against 2.8% without) |
+| Another Gaia source within 3 arcsec | 23.8% (against 3.5%) |
+| Another bright Euclid source within 3 arcsec | 12.9% (against 3.7%) |
+| Euclid "blended" bit set | 4.6% (against 2.3%) |
+| Tier A (no Euclid flags) | 2.1% |
+
+**Change 1: each star is judged against its own Gaia uncertainty.** The old test divided by the scatter of
+a one-magnitude bin. Gaia's uncertainty at the tile epoch (position error plus proper-motion error times
+about 8 years) grows from 0.3 mas at G < 16 to about 10 mas at G > 20.5, so it varies a lot inside a bin.
+Now: expected scatter = Euclid's share for the bin (measured scatter with the median Gaia part removed,
+floor 3 mas) plus the star's own Gaia part; bins are half a magnitude. In the pilot tile Euclid's share
+comes out between 4 and 8 mas per axis at every brightness.
+
+**After the change** (94 tiles, 82,230 stars with a position test): 2,823 flagged, 3.4%. Tier A 1.4%;
+"blended" bit clear 1.6%; RUWE high 35.6%; Gaia neighbour 22.7%. By context: 859 poor Gaia fit, 243 a
+neighbour, 49 Gaia variable, 1,668 with nothing in either catalogue to hint why.
+
+The rate is still far above what a Gaussian gives at 5 sigma. I have not established why. Candidates, none
+tested: blends below Gaia's resolution; stars whose proper motion over Gaia's 34 months differs from their
+motion over 8 years (long-period binaries); Gaia uncertainties that are too small for faint stars; Euclid
+centroid errors with long tails. The by-eye look that G3 asked for is not done: the Euclid cutout service
+did not answer a guessed request, and each outlier links to ESASky instead.
+
+**Change 2: Euclid's total flux, not the 2-FWHM aperture.** Offset of each flux from Gaia G at BP−RP = 1,
+median over tiles:
+
+| Euclid flux | North (23 tiles) | South (66 tiles) | Difference |
+|---|---|---|---|
+| 2-FWHM aperture | 0.236 | 0.084 | 0.153 mag |
+| PSF | −0.016 | −0.032 | 0.016 mag |
+| Total (Kron) | −0.116 | −0.115 | −0.001 mag |
+
+The aperture flux differs by 0.15 mag between hemispheres; the total flux does not. My guess, not checked
+against the documentation: the aperture size follows the seeing of the ground-based images, which come
+from different telescopes north and south. The total flux is also the one the Euclid cookbook calls the
+reference measurement.
+
+**Global relation** (`data/index/colour_relation.json`): 33,211 stars in 89 tiles, scatter 0.026 mag.
+Tile offsets from it: standard deviation 2.6 mmag, range −5.8 to +8.9 mmag, north and south medians within
+1 mmag. Euclid's VIS zero point, seen through Gaia, is uniform to a few thousandths of a magnitude over
+this sample. This is relative: the relation is fitted to the same data.
+
+**Brightness outliers after both changes:** 2,924 over 94 tiles.
+
+**Frozen as method v1** (`tolerances.json`): tiers A and B; half-magnitude bins; match radius 0.5 arcsec;
+neighbour radius 3 arcsec; 5-sigma cuts; Euclid floor 3 mas; total flux; fit range G 18 to 20.
+
+**Still blocked.** Gaia spectrum service: HTTP 500 again several hours later.

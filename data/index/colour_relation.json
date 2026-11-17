@@ -1,0 +1,21 @@
+{
+ "bp_rp_range": [
+  0.3,
+  2.5
+ ],
+ "coefficients": [
+  0.28209,
+  -0.47607,
+  0.07901
+ ],
+ "flux_column": "flux_detection_total",
+ "g_range": [
+  18.0,
+  20.0
+ ],
+ "n_stars": 33211,
+ "n_tiles": 89,
+ "n_used": 30865,
+ "sigma_mag": 0.0255,
+ "tile_offset_sigma_mag": 0.0021
+}

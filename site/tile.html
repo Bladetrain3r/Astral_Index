@@ -16,12 +16,14 @@
     <div class="panel"><b>Brightness residual</b> <span class="note">mag about the colour relation, against Gaia G</span><canvas id="p3"></canvas></div>
     <div class="panel"><b>Colour relation</b> <span class="note">Euclid VIS − Gaia G against BP − RP</span><canvas id="p4"></canvas></div>
   </div>
-  <p class="note">Blue: usable stars. Orange: outliers beyond 5 times the measured scatter. Points beyond the axes are drawn at the edge. Click a point for the source.</p>
+  <p class="note">Blue: usable stars. Orange: outliers beyond 5 times the expected scatter. Points beyond the axes are drawn at the edge. Click a point for the source.</p>
 
   <div class="panel" id="source" style="display:none"></div>
 
   <h2>Outliers</h2>
   <p class="note">Disagreements, not errors and not discoveries. Context lists facts from both catalogues that often go with a disagreement.</p>
+  <div class="row"><label>Show <select id="ofilter"><option value="all">all outliers</option><option value="none">no context: nothing in either catalogue hints why</option>
+   <option value="gaia_ruwe_high">poor Gaia single-star fit</option><option value="neighbour">a close neighbour</option><option value="gaia_variable">Gaia variable</option></select></label> <span class="note" id="ocount"></span></div>
   <div class="panel scroll" style="max-height:440px;overflow-y:auto;padding:0"><table id="out"></table></div>
 
   <h2>Match audit</h2>
@@ -58,11 +60,11 @@ function showSource(id, scroll) {
   <div class="scroll"><table><thead><tr><th></th><th>Gaia DR3</th><th>Euclid DR1</th></tr></thead><tbody>
   ${row("Position (deg)", "moved to the tile epoch by its proper motion", `${(+s.ra_euclid).toFixed(7)}, ${(+s.dec_euclid).toFixed(7)}`)}
   ${row("Proper motion (mas/yr)", s.pmra === "" ? "none published" : `${fmt(s.pmra, 2)}, ${fmt(s.pmdec, 2)}`, "–")}
-  ${row("Brightness", `G ${fmt(s.g_mag, 3)}, BP−RP ${fmt(num(s.bp_rp), 3)}`, `VIS aperture ${fmt(num(s.vis_mag), 3)}`)}
+  ${row("Brightness", `G ${fmt(s.g_mag, 3)}, BP−RP ${fmt(num(s.bp_rp), 3)}`, `VIS total ${fmt(num(s.vis_mag), 3)}`)}
   ${row("Quality", `RUWE ${fmt(num(s.ruwe), 2)}${s.gaia_variable === "VARIABLE" ? ", variable" : ""}${s.has_gaia_spectrum === "true" ? ", has spectrum" : ""}`,
         `tier ${s.tier}, flags ${s.flag_vis}/${s.det_quality_flag}, point-like ${fmt(num(s.point_like_prob), 2)}`)}
   </tbody></table></div>
-  <p>Position: Euclid − Gaia = <b>${fmt(s.d_ra_mas, 1)}, ${fmt(s.d_dec_mas, 1)} mas</b> (before proper motion ${fmt(s.raw_d_ra_mas, 1)}, ${fmt(s.raw_d_dec_mas, 1)})${s.pos_z ? `, ${fmt(s.pos_z, 1)} times the scatter for its brightness` : ""}.<br>
+  <p>Position: Euclid − Gaia = <b>${fmt(s.d_ra_mas, 1)}, ${fmt(s.d_dec_mas, 1)} mas</b> (before proper motion ${fmt(s.raw_d_ra_mas, 1)}, ${fmt(s.raw_d_dec_mas, 1)})${s.pos_z ? `, ${fmt(s.pos_z, 1)} times what is expected for this star (Gaia's own uncertainty at this epoch: ${fmt(s.gaia_sigma_mas, 1)} mas per axis)` : ""}.<br>
   Brightness: ${s.vis_resid_mag === "" ? "not in the colour relation's range" : `<b>${fmt(s.vis_resid_mag, 3)} mag</b> from the colour relation${s.vis_z ? `, ${fmt(s.vis_z, 1)} times the scatter` : ""} (negative: brighter in Euclid)`}.</p>
   <p>${links(s)}</p>`;
   if (scroll) el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -100,10 +102,15 @@ function plots() {
   if ((p.n_used ?? 0) < 100) $("#thin").textContent = "Fewer than 100 usable stars: this tile is only partly covered by the catalogue, or sparse. Treat its statistics as indicative.";
   plots(); addEventListener("resize", plots);
   const out = await getCSV(base + "outliers.csv");
-  sortable($("#out"), out, [{ k: "gaia_source_id", h: "Gaia DR3 source" }, { k: "g_mag", h: "G" }, { k: "d_ra_mas", h: "ΔRA mas" }, { k: "d_dec_mas", h: "ΔDec mas" }, { k: "pos_z", h: "× scatter" },
-    { k: "vis_resid_mag", h: "Δ bright. mag" }, { k: "vis_z", h: "× scatter" }, { k: "tier", h: "Tier" }, { k: "context", h: "Context" }],
-    s => `<tr style="cursor:pointer" onclick="showSource('${s.gaia_source_id}',true)"><td class="mono">${s.gaia_source_id}</td><td>${fmt(s.g_mag, 2)}</td><td>${fmt(s.d_ra_mas, 1)}</td><td>${fmt(s.d_dec_mas, 1)}</td><td>${fmt(num(s.pos_z), 1)}</td>
-     <td>${fmt(num(s.vis_resid_mag), 3)}</td><td>${fmt(num(s.vis_z), 1)}</td><td>${s.tier}</td><td style="text-align:left">${esc(s.context)}</td></tr>`);
+  const drawOut = () => {
+    const f = $("#ofilter").value, rows = out.filter(o => f === "all" ? true : f === "none" ? o.context === "" : f === "neighbour" ? /neighbour/.test(o.context) : o.context.includes(f));
+    $("#ocount").textContent = `${rows.length} of ${out.length}`;
+    sortable($("#out"), rows, [{ k: "gaia_source_id", h: "Gaia DR3 source" }, { k: "g_mag", h: "G" }, { k: "d_ra_mas", h: "ΔRA mas" }, { k: "d_dec_mas", h: "ΔDec mas" }, { k: "pos_z", h: "× expected" },
+      { k: "vis_resid_mag", h: "Δ bright. mag" }, { k: "vis_z", h: "× scatter" }, { k: "tier", h: "Tier" }, { k: "context", h: "Context" }],
+      s => `<tr style="cursor:pointer" onclick="showSource('${s.gaia_source_id}',true)"><td class="mono">${s.gaia_source_id}</td><td>${fmt(s.g_mag, 2)}</td><td>${fmt(s.d_ra_mas, 1)}</td><td>${fmt(s.d_dec_mas, 1)}</td><td>${fmt(num(s.pos_z), 1)}</td>
+       <td>${fmt(num(s.vis_resid_mag), 3)}</td><td>${fmt(num(s.vis_z), 1)}</td><td>${s.tier}</td><td style="text-align:left">${esc(s.context)}</td></tr>`);
+  };
+  $("#ofilter").onchange = drawOut; drawOut();
   if (!out.length) $("#out").insertAdjacentHTML("afterend", '<p class="note" style="padding:8px">No outliers in this tile.</p>');
   const A = [["agree", "Euclid's Gaia match and ours agree"], ["differ", "Euclid and we name different Euclid sources for a Gaia star"], ["only_euclid", "Euclid names a match we do not find within 0.5 arcsec"],
     ["only_ours", "We find a match that Euclid's catalogue does not link"], ["duplicate_vis_nir", "One Gaia star claimed by a VIS detection and a near-infrared-only detection"],
@@ -112,8 +119,8 @@ function plots() {
   $("#audit").innerHTML = "<thead><tr><th>Case</th><th>Count</th></tr></thead><tbody>" + A.map(([k, h]) => `<tr><td>${h}</td><td>${a[k]}</td></tr>`).join("") + "</tbody>";
   $("#auditnote").innerHTML = `The individual cases are in <a href="${base}match_audit.json">match_audit.json</a>. Gaia sources within 10 arcsec of the tile edge are left out: the neighbouring tile may hold their match.`;
   const bins = Object.keys({ ...(p.by_g_bin || {}), ...(br.by_g_bin || {}) }).sort((x, y) => parseFloat(x) - parseFloat(y));
-  $("#bins").innerHTML = "<thead><tr><th>Gaia G</th><th>Stars</th><th>Scatter RA mas</th><th>Scatter Dec mas</th><th>Before proper motion, RA</th><th>Dec</th><th>Bright. median mag</th><th>Bright. scatter mag</th></tr></thead><tbody>" +
-    bins.map(k => { const x = (p.by_g_bin || {})[k] || {}, y = (br.by_g_bin || {})[k] || {}; return `<tr><td>${k}</td><td>${x.n ?? "–"}</td><td>${fmt(x.sigma_ra_mas, 1)}</td><td>${fmt(x.sigma_dec_mas, 1)}</td><td>${fmt(x.raw_sigma_ra_mas, 1)}</td><td>${fmt(x.raw_sigma_dec_mas, 1)}</td><td>${fmt(y.median_mag, 3)}</td><td>${fmt(y.sigma_mag, 3)}</td></tr>`; }).join("") + "</tbody>";
+  $("#bins").innerHTML = "<thead><tr><th>Gaia G</th><th>Stars</th><th>Scatter RA mas</th><th>Scatter Dec mas</th><th>Gaia's share mas</th><th>Euclid's share mas</th><th>Before proper motion, RA</th><th>Dec</th><th>Bright. median mag</th><th>Bright. scatter mag</th></tr></thead><tbody>" +
+    bins.map(k => { const x = (p.by_g_bin || {})[k] || {}, y = (br.by_g_bin || {})[k] || {}; return `<tr><td>${k}</td><td>${x.n ?? "–"}</td><td>${fmt(x.sigma_ra_mas, 1)}</td><td>${fmt(x.sigma_dec_mas, 1)}</td><td>${fmt(x.gaia_sigma_ra_mas == null ? null : Math.hypot(x.gaia_sigma_ra_mas, x.gaia_sigma_dec_mas) / Math.SQRT2, 1)}</td><td>${fmt(x.euclid_sigma_ra_mas == null ? null : Math.hypot(x.euclid_sigma_ra_mas, x.euclid_sigma_dec_mas) / Math.SQRT2, 1)}</td><td>${fmt(x.raw_sigma_ra_mas, 1)}</td><td>${fmt(x.raw_sigma_dec_mas, 1)}</td><td>${fmt(y.median_mag, 3)}</td><td>${fmt(y.sigma_mag, 3)}</td></tr>`; }).join("") + "</tbody>";
   $("#prov").innerHTML = prov.length ? prov.map(r => `<details><summary><b>${esc(r.archive)}</b> · ${r.rows} rows · fetched ${esc(r.fetched_utc)} · <span class="mono">sha256 ${esc(r.sha256.slice(0, 16))}…</span></summary>
     <pre>${esc(r.query)}</pre><span class="note">POST ${esc(r.url)} · snapshot <span class="mono">${esc(r.file)}</span> · sha256 <span class="mono">${esc(r.sha256)}</span></span></details>`).join("") : '<span class="note">No provenance file.</span>';
   [["dl1", "sources.csv"], ["dl2", "outliers.csv"], ["dl3", "summary.json"], ["dl4", "match_audit.json"]].forEach(([i, f]) => $("#" + i).href = base + f);

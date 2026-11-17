@@ -1,5 +1,5 @@
 {
-  "_comment": "Provisional until G3 freezes them. Every threshold the checks use lives here.",
+  "_comment": "Method v1, frozen 2026-11-17 at gate G3 (LOG.md R3). Every threshold the checks use lives here; a change is a new method version with a LOG entry.",
   "candidate_flux_vis_ujy": 9.0,
   "gaia_box_margin_arcsec": 5.0,
   "edge_margin_arcsec": 10.0,
@@ -7,22 +7,42 @@
   "g_bins": [
     [
       10,
+      16
+    ],
+    [
+      16,
       17
     ],
     [
       17,
+      17.5
+    ],
+    [
+      17.5,
       18
     ],
     [
       18,
+      18.5
+    ],
+    [
+      18.5,
       19
     ],
     [
       19,
+      19.5
+    ],
+    [
+      19.5,
       20
     ],
     [
       20,
+      20.5
+    ],
+    [
+      20.5,
       21.5
     ]
   ],
@@ -41,9 +61,12 @@
   },
   "bad_flag_bits": 13,
   "_bad_flag_bits": "1 contaminated or bad pixels, 4 saturated, 8 near a border (Euclid MER photometry cookbook). Tier A: both flags zero. Tier B: none of these bits; blended and bright-star-mask bits allowed. Tier C: the rest, not used.",
-  "brightness_flux": "flux_vis_2fwhm_aper",
+  "brightness_flux": "flux_detection_total",
   "brightness_flux_also": [
     "flux_vis_psf",
-    "flux_detection_total"
-  ]
+    "flux_vis_2fwhm_aper"
+  ],
+  "euclid_floor_min_mas": 3.0,
+  "neighbour_radius_arcsec": 3.0,
+  "method_version": 1
 }

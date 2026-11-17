@@ -4,7 +4,7 @@
 
 Results are a pure function of the snapshots and tolerances.json: run it twice, get the same bytes.
 """
-import argparse, csv, json, os
+import argparse, csv, json, math, os
 from . import fetch, checks
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,9 +22,35 @@ def rounded(o, n=4):
     return r(o, n)
 
 
-def context(e, g):
+def neighbours(points, radius_arcsec):
+    """For each (ra, dec), the distance in arcsec to the nearest other point within the radius, or None."""
+    cell = radius_arcsec / 3600.0
+    grid = {}
+    for i, (ra, dec) in enumerate(points):
+        grid.setdefault((int(dec // cell), int(ra * math.cos(math.radians(dec)) // cell)), []).append(i)
+    out = []
+    for i, (ra, dec) in enumerate(points):
+        ky, kx = int(dec // cell), int(ra * math.cos(math.radians(dec)) // cell)
+        best = None
+        for dy in (-1, 0, 1):
+            for dx in (-2, -1, 0, 1, 2):
+                for j in grid.get((ky + dy, kx + dx), ()):
+                    if j != i:
+                        x, y = checks.offset_mas(points[j][0], points[j][1], ra, dec)
+                        d = math.hypot(x, y) / 1000.0
+                        if d <= radius_arcsec and (best is None or d < best):
+                            best = d
+        out.append(best)
+    return out
+
+
+def context(e, g, gaia_nb=None, euclid_nb=None):
     """Facts from either catalogue that often go with a disagreement. Not a diagnosis."""
     out = []
+    if gaia_nb is not None:
+        out.append("gaia_neighbour")           # another Gaia source within a few arcsec
+    if euclid_nb is not None:
+        out.append("euclid_neighbour")         # another bright Euclid source within a few arcsec
     ruwe, plp = checks.f(g["ruwe"]), checks.f(e["point_like_prob"])
     if ruwe is not None and ruwe > 1.4:
         out.append("gaia_ruwe_high")           # Gaia's own sign of a poor single-star fit
@@ -49,6 +75,12 @@ def run_tile(tile, snap, out, offline=False, tol_path=None):
     prs = checks.pairs(euclid, gaia, epoch)
     pos, pos_out = checks.position_check(prs, tol)
     bri, bri_out = checks.brightness_check(prs, tol)
+
+    rad = tol["neighbour_radius_arcsec"]
+    gnb = dict(zip((g["source_id"] for g in gaia), neighbours([(float(g["ra"]), float(g["dec"])) for g in gaia], rad)))
+    vis = [e for e in euclid if e.get("vis_det", "1") == "1"]
+    enb = dict(zip((e["object_id"] for e in vis),
+                   neighbours([(float(e["right_ascension"]), float(e["declination"])) for e in vis], rad)))
 
     summary = {
         "tile_index": int(tile),
@@ -78,18 +110,19 @@ def run_tile(tile, snap, out, offline=False, tol_path=None):
         fh.write("\n")
 
     cols = ["gaia_source_id", "euclid_object_id", "g_mag", "bp_rp", "ra_euclid", "dec_euclid",
-            "d_ra_mas", "d_dec_mas", "raw_d_ra_mas", "raw_d_dec_mas", "pos_z", "vis_mag",
+            "d_ra_mas", "d_dec_mas", "raw_d_ra_mas", "raw_d_dec_mas", "gaia_sigma_mas", "pos_z", "vis_mag",
             "vis_resid_mag", "vis_z", "tier", "point_like_prob", "flag_vis", "det_quality_flag",
             "gaia_match_quality", "pmra", "pmdec", "ruwe", "gaia_variable", "has_gaia_spectrum", "context"]
     def row(p):
         e, g = p["e"], p["g"]
         v = checks.vis_mag(e, tol["brightness_flux"])
         return [g["source_id"], e["object_id"], r(p["G"]), r(p.get("bp_rp")), e["right_ascension"],
-                e["declination"], r(p["dx"], 2), r(p["dy"], 2), r(p["raw_dx"], 2), r(p["raw_dy"], 2),
+                e["declination"], r(p["dx"], 2), r(p["dy"], 2), r(p["raw_dx"], 2), r(p["raw_dy"], 2), r(math.hypot(p["gsx"], p["gsy"]) / math.sqrt(2), 2),
                 r(p.get("pos_z"), 2), r(v), r(p.get("vis_resid")), r(p.get("vis_z"), 2),
                 checks.tier(e, tol), e["point_like_prob"], e["flag_vis"], e["det_quality_flag"],
                 e["gaia_match_quality"], g["pmra"], g["pmdec"], g["ruwe"], g["phot_variable_flag"],
-                g["has_xp_continuous"], context(e, g)]
+                g["has_xp_continuous"],
+                context(e, g, gnb.get(g["source_id"]), enb.get(e["object_id"]))]
     def write(name, ps):
         with open(os.path.join(d, name), "w", newline="") as fh:
             w = csv.writer(fh, lineterminator="\n")
