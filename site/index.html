@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Astral Index</title><link rel="stylesheet" href="app.css"></head>
+<body>
+<header>
+  <h1><a href="index.html">Astral Index</a></h1>
+  <p class="sub">Where Gaia DR3 and Euclid DR1 disagree on the stars both see. Every number rebuilds from kept archive snapshots.</p>
+</header>
+<main>
+  <div class="stats" id="stats"></div>
+
+  <div class="panel">
+    <div class="row">
+      <label>Colour tiles by <select id="metric"></select></label>
+      <span class="legend"><span id="lo"></span><i id="bar"></i><span id="hi"></span></span>
+      <span style="flex:1"></span>
+      <input id="q" placeholder="Tile, Gaia source ID, or RA Dec" size="30"><button id="go">Find</button>
+    </div>
+    <canvas id="sky"></canvas>
+    <p class="note" id="metricnote"></p>
+    <p class="note warn" id="findmsg"></p>
+  </div>
+
+  <h2>Tiles</h2>
+  <p class="note">Click a column to sort, a row to open the tile. Scatter is per axis, after applying Gaia proper motions, over usable stars.</p>
+  <div class="panel scroll" style="max-height:520px;overflow-y:auto;padding:0"><table id="tiles"></table></div>
+
+  <h2>How to read this</h2>
+  <div class="panel">
+    <p><b>Match audit.</b> Euclid's catalogue names a Gaia counterpart for each star. We redo the match independently
+    (Gaia position moved by its proper motion to the tile's coordinate epoch, nearest Euclid source within 0.5 arcsec) and count where the two differ.</p>
+    <p><b>Position.</b> Euclid position minus propagated Gaia position. Euclid's astrometry is calibrated on Gaia, so a tile's median offset
+    measures calibration, not independent agreement. Euclid publishes no per-source position error, so an outlier is a star beyond 5 times the scatter measured for its brightness.</p>
+    <p><b>Brightness.</b> A colour relation from Gaia G and BP−RP to Euclid VIS is fitted per tile; the residual about it is the product. It tests star-to-star consistency, not the absolute level.</p>
+    <p><b>Outliers are flags, not findings.</b> Each carries context from both catalogues (poor Gaia fit, no Gaia proper motion, Euclid says extended) and nothing here has been checked by eye unless it says so.</p>
+  </div>
+</main>
+<footer id="foot"></footer>
+<div id="tip"></div>
+<script src="common.js"></script>
+<script>
+const METRICS = [
+  { k: "sigma_pos", h: "Position scatter (mas)", d: 1, note: "Per-axis scatter of Euclid minus propagated Gaia positions, over usable stars." },
+  { k: "offset", h: "Median offset (mas)", d: 1, note: "Length of the tile's median position offset. Measures astrometric calibration against Gaia." },
+  { k: "epoch_abs", h: "Implied epoch error (yr)", d: 2, note: "Slope of position residual against proper motion. Zero if the documented coordinate epoch is right." },
+  { k: "brightness_sigma_mag", h: "Brightness scatter (mag)", d: 3, note: "Scatter about the fitted colour relation, aperture flux." },
+  { k: "psf_ratio", h: "PSF / aperture scatter", d: 2, note: "How much noisier Euclid's PSF flux is than its aperture flux for stars. Euclid documents a PSF-fitting issue in DR1." },
+  { k: "unmatched_frac", h: "Gaia sources without a Euclid match (%)", d: 1, note: "Share of Gaia sources inside the tile with no Euclid source within 0.5 arcsec." },
+  { k: "outlier_frac", h: "Outliers (% of usable)", d: 1, note: "Position plus brightness outliers at 5 sigma, as a share of usable stars." },
+  { k: "usable", h: "Usable stars", d: 0, note: "Matched stars with no contaminated, saturated or border flag in Euclid." },
+];
+let T = [], hit = [];
+function derive(t) {
+  const n = k => num(t[k]);
+  t.sigma_pos = n("sigma_ra_mas") == null ? null : Math.hypot(n("sigma_ra_mas"), n("sigma_dec_mas")) / Math.SQRT2;
+  t.offset = n("median_ra_mas") == null ? null : Math.hypot(n("median_ra_mas"), n("median_dec_mas"));
+  t.epoch_abs = n("epoch_offset_ra_year") == null ? null : Math.max(Math.abs(n("epoch_offset_ra_year")), Math.abs(n("epoch_offset_dec_year")));
+  t.psf_ratio = n("psf_sigma_mag") && n("brightness_sigma_mag") ? n("psf_sigma_mag") / n("brightness_sigma_mag") : null;
+  const inside = n("agree") + n("differ") + n("only_euclid") + n("only_ours") + n("gaia_unmatched");
+  t.unmatched_frac = inside ? 100 * n("gaia_unmatched") / inside : null;
+  t.outlier_frac = n("usable") >= 100 ? 100 * (n("outliers_position") + n("outliers_brightness")) / n("usable") : null;
+  t.usable = n("usable"); t.thin = t.usable < 100;
+  ["brightness_sigma_mag"].forEach(k => t[k] = n(k));
+  if (t.thin) ["sigma_pos", "offset", "epoch_abs", "brightness_sigma_mag", "psf_ratio"].forEach(k => t[k] = null);
+  return t;
+}
+function range(k) {
+  const v = T.map(t => t[k]).filter(x => x != null).sort((a, b) => a - b);
+  return v.length ? [v[Math.floor(v.length * 0.02)], v[Math.ceil(v.length * 0.98) - 1]] : [0, 1];
+}
+function drawSky() {
+  const m = METRICS[$("#metric").selectedIndex], [g, W, H] = setupCanvas($("#sky"), Math.max(260, Math.min(460, $("#sky").clientWidth * 0.5)));
+  const [lo, hi] = range(m.k);
+  $("#lo").textContent = fmt(lo, m.d); $("#hi").textContent = fmt(hi, m.d); $("#bar").style.background = RAMP_CSS; $("#metricnote").textContent = m.note + " Grey: too few usable stars to say.";
+  const pad = 28, X = ra => pad + (360 - ra) / 360 * (W - 2 * pad), Y = dec => pad / 2 + (90 - dec) / 180 * (H - pad * 1.5);
+  g.clearRect(0, 0, W, H); g.strokeStyle = css("--line"); g.fillStyle = css("--muted"); g.font = "11px system-ui"; g.textAlign = "center";
+  for (let ra = 0; ra <= 360; ra += 60) { g.beginPath(); g.moveTo(X(ra), Y(90)); g.lineTo(X(ra), Y(-90)); g.stroke(); g.fillText(ra + "°", X(ra), H - 4); }
+  g.textAlign = "right";
+  for (let d = -90; d <= 90; d += 30) { g.beginPath(); g.moveTo(X(360), Y(d)); g.lineTo(X(0), Y(d)); g.stroke(); g.fillText(d + "°", pad - 4, Y(d) + 4); }
+  // Galactic plane, for orientation
+  g.strokeStyle = css("--muted"); g.setLineDash([3, 4]); g.beginPath();
+  const ap = 192.85948 * Math.PI / 180, dp = 27.12825 * Math.PI / 180; let prev = null;
+  for (let l = 0; l <= 360; l += 2) {
+    const L = (122.93192 - l) * Math.PI / 180, dec = Math.asin(Math.cos(dp) * Math.cos(L)), ra = ((ap + Math.atan2(Math.sin(L), -Math.sin(dp) * Math.cos(L))) * 180 / Math.PI + 720) % 360;
+    if (prev != null && Math.abs(ra - prev) < 90) g.lineTo(X(ra), Y(dec * 180 / Math.PI)); else g.moveTo(X(ra), Y(dec * 180 / Math.PI)); prev = ra;
+  }
+  g.stroke(); g.setLineDash([]);
+  hit = [];
+  for (const t of T) {
+    const x = X(+t.ra), y = Y(+t.dec), v = t[m.k];
+    g.fillStyle = v == null ? css("--muted") : ramp((v - lo) / (hi - lo || 1));
+    g.beginPath(); g.arc(x, y, 4.5, 0, 6.3); g.fill();
+    hit.push([x, y, t, v]);
+  }
+  g.fillStyle = css("--muted"); g.textAlign = "left"; g.fillText("RA increases to the left · dashed: Galactic plane", pad, 11);
+}
+function nearest(ev) {
+  const r = $("#sky").getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top;
+  let best = null, bd = 144;
+  for (const h of hit) { const d = (h[0] - mx) ** 2 + (h[1] - my) ** 2; if (d < bd) { bd = d; best = h; } }
+  return best;
+}
+async function find() {
+  const q = $("#q").value.trim(), msg = $("#findmsg"); msg.textContent = "";
+  if (!q) return;
+  if (T.some(t => t.tile_index === q)) return location.href = "tile.html?tile=" + q;
+  const parts = q.split(/[\s,]+/).map(Number);
+  if (parts.length === 2 && parts.every(Number.isFinite)) {
+    let best = null, bd = 1e9;
+    for (const t of T) { const d = Math.hypot((t.ra - parts[0]) * Math.cos(parts[1] * Math.PI / 180), t.dec - parts[1]); if (d < bd) { bd = d; best = t; } }
+    if (bd < 0.4) return location.href = "tile.html?tile=" + best.tile_index;
+    msg.textContent = `No processed tile covers that position. The nearest is ${best.tile_index}, ${bd.toFixed(1)}° away.`; return;
+  }
+  if (/^\d{10,20}$/.test(q)) {
+    const idx = await getJSON("data/index/sources.json").catch(() => null);
+    const tile = idx && idx[q.slice(-2)] && idx[q.slice(-2)][q];
+    if (tile) return location.href = `tile.html?tile=${tile}&source=${q}`;
+    msg.textContent = "That Gaia source is not among the matched stars in the processed tiles."; return;
+  }
+  msg.textContent = "Enter a tile number, a Gaia source ID, or RA and Dec in degrees.";
+}
+(async () => {
+  T = (await getCSV("data/index/tiles.csv")).map(derive);
+  const build = await getJSON("data/index/build.json").catch(() => ({}));
+  const sum = k => T.reduce((a, t) => a + (num(t[k]) || 0), 0), med = k => { const v = T.map(t => t[k]).filter(x => x != null).sort((a, b) => a - b); return v[Math.floor(v.length / 2)]; };
+  $("#stats").innerHTML = [
+    [T.length, `tiles of ${build.tiles_in_release ?? "?"} in the release`],
+    [sum("pairs").toLocaleString(), "Gaia–Euclid star pairs"],
+    [fmt(med("sigma_pos"), 1) + " mas", "typical position scatter"],
+    [fmt(med("brightness_sigma_mag"), 3) + " mag", "typical brightness scatter"],
+    [sum("differ") + sum("only_euclid"), "matches where Euclid and we name different stars"],
+    [(sum("outliers_position") + sum("outliers_brightness")).toLocaleString(), "outliers flagged"],
+  ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join("");
+  $("#metric").innerHTML = METRICS.map(m => `<option>${m.h}</option>`).join("");
+  $("#metric").onchange = drawSky; addEventListener("resize", drawSky); drawSky();
+  $("#sky").onmousemove = ev => { const h = nearest(ev); $("#sky").style.cursor = h ? "pointer" : "default"; tip(ev, h && `Tile ${h[2].tile_index}<br>RA ${fmt(h[2].ra, 2)} Dec ${fmt(h[2].dec, 2)}<br>${h[3] == null ? "too few usable stars" : fmt(h[3], METRICS[$("#metric").selectedIndex].d)}`); };
+  $("#sky").onmouseleave = () => tip();
+  $("#sky").onclick = ev => { const h = nearest(ev); if (h) location.href = "tile.html?tile=" + h[2].tile_index; };
+  $("#go").onclick = find; $("#q").onkeydown = e => e.key === "Enter" && find();
+  const cols = [{ k: "tile_index", h: "Tile" }, { k: "ra", h: "RA" }, { k: "dec", h: "Dec" }, { k: "gal_lat", h: "Gal. lat" }, { k: "reference_date", h: "Epoch" },
+    { k: "usable", h: "Usable" }, { k: "sigma_pos", h: "Pos. scatter mas" }, { k: "offset", h: "Offset mas" }, { k: "brightness_sigma_mag", h: "Bright. scatter mag" },
+    { k: "only_ours", h: "Match: only ours", t: "We find a Euclid source for a Gaia star that Euclid's catalogue does not link" }, { k: "gaia_unmatched", h: "Gaia unmatched" },
+    { k: "outliers_position", h: "Pos. outliers" }, { k: "outliers_brightness", h: "Bright. outliers" }];
+  sortable($("#tiles"), T, cols, t => `<tr onclick="location.href='tile.html?tile=${t.tile_index}'" style="cursor:pointer"><td><a href="tile.html?tile=${t.tile_index}">${t.tile_index}</a></td>
+    <td>${fmt(t.ra, 2)}</td><td>${fmt(t.dec, 2)}</td><td>${fmt(t.gal_lat, 1)}</td><td>${t.reference_date}</td><td>${t.usable}</td><td>${fmt(t.sigma_pos, 1)}</td><td>${fmt(t.offset, 1)}</td>
+    <td>${fmt(t.brightness_sigma_mag, 3)}</td><td>${t.only_ours}</td><td>${t.gaia_unmatched}</td><td>${t.outliers_position}</td><td>${t.outliers_brightness}</td></tr>`);
+  $("#foot").innerHTML = `${esc(CREDIT)}<br>Built from commit <code>${esc(build.commit || "?")}</code>, catalogues Gaia DR3 and Euclid DR1. <a href="https://github.com/Bladetrain3r/Astral_Index">Source and method</a>.`;
+})().catch(e => { $("main").insertAdjacentHTML("afterbegin", `<p class="warn">Could not load the data: ${esc(e.message)}</p>`); });
+</script>
+</body></html>

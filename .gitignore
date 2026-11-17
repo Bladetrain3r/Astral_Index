@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+/_site/
+# per-source tables are rebuilt from snapshots; only the pilot tile keeps its copy
+/data/tiles/*/sources.csv
+!/data/tiles/102018694/sources.csv

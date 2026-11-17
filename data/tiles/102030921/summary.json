@@ -1,0 +1,163 @@
+{
+ "box_deg": {
+  "dec_max": -38.7923,
+  "dec_min": -39.2498,
+  "ra_max": 42.7258,
+  "ra_min": 42.486
+ },
+ "c1_match_audit": {
+  "agree": 159,
+  "differ": 0,
+  "duplicate_other": 0,
+  "duplicate_vis_nir": 6,
+  "euclid_names_unknown_gaia": 0,
+  "gaia_unmatched": 120,
+  "only_euclid": 0,
+  "only_ours": 3
+ },
+ "c2_position": {
+  "by_g_bin": {
+   "10-17": {
+    "n": 7,
+    "raw_sigma_dec_mas": 54.6017,
+    "raw_sigma_ra_mas": 76.4111,
+    "sigma_dec_mas": 3.5576,
+    "sigma_ra_mas": 5.092
+   },
+   "17-18": {
+    "n": 16,
+    "raw_sigma_dec_mas": 82.6337,
+    "raw_sigma_ra_mas": 66.2304,
+    "sigma_dec_mas": 4.3098,
+    "sigma_ra_mas": 6.3119
+   },
+   "18-19": {
+    "n": 15,
+    "raw_sigma_dec_mas": 52.4618,
+    "raw_sigma_ra_mas": 91.7498,
+    "sigma_dec_mas": 6.3186,
+    "sigma_ra_mas": 7.6331
+   },
+   "19-20": {
+    "n": 29,
+    "raw_sigma_dec_mas": 54.803,
+    "raw_sigma_ra_mas": 57.2464,
+    "sigma_dec_mas": 6.0693,
+    "sigma_ra_mas": 6.2412
+   },
+   "20-21.5": {
+    "n": 38,
+    "raw_sigma_dec_mas": 43.9088,
+    "raw_sigma_ra_mas": 50.3284,
+    "sigma_dec_mas": 11.3574,
+    "sigma_ra_mas": 9.7428
+   }
+  },
+  "by_tier": {
+   "A": {
+    "n": 34,
+    "sigma_dec_mas": 8.5401,
+    "sigma_ra_mas": 9.2865
+   },
+   "B": {
+    "n": 71,
+    "sigma_dec_mas": 6.1945,
+    "sigma_ra_mas": 6.5997
+   }
+  },
+  "implied_epoch_offset": {
+   "dec_year": -0.1125,
+   "ra_year": -0.1571
+  },
+  "median_dec_mas": 2.8682,
+  "median_ra_mas": -9.4524,
+  "n_used": 105
+ },
+ "c3_brightness_colour_fit": {
+  "fitted": false,
+  "flux_column": "flux_vis_2fwhm_aper",
+  "n_fit": 41,
+  "other_flux_columns": {
+   "flux_detection_total": {
+    "fit_sigma_mag": null,
+    "n_fit": 41,
+    "offset_at_bp_rp_1_mag": null
+   },
+   "flux_vis_psf": {
+    "fit_sigma_mag": null,
+    "n_fit": 41,
+    "offset_at_bp_rp_1_mag": null
+   }
+  }
+ },
+ "catalogues": {
+  "euclid": "dr1.mer_catalogue_wide_survey",
+  "euclid_release": "DR1_R2",
+  "gaia": "gaiadr3.gaia_source"
+ },
+ "counts": {
+  "euclid_candidates": 236,
+  "euclid_with_gaia_id": 169,
+  "gaia_in_box": 299,
+  "pairs": 160,
+  "pairs_not_star_like": 40,
+  "pairs_tier_a": 49,
+  "pairs_tier_b": 85,
+  "pairs_usable_with_gaia_spectrum": 15,
+  "pairs_with_gaia_spectrum": 33
+ },
+ "epoch_half_span_year": 0.0002,
+ "epoch_year": 2025.0327,
+ "outliers": {
+  "brightness": 0,
+  "position": 4
+ },
+ "tile_index": 102030921,
+ "tolerances": {
+  "bad_flag_bits": 13,
+  "brightness_flux": "flux_vis_2fwhm_aper",
+  "brightness_flux_also": [
+   "flux_vis_psf",
+   "flux_detection_total"
+  ],
+  "brightness_outlier_sigma": 5.0,
+  "candidate_flux_vis_ujy": 9.0,
+  "colour_fit": {
+   "bp_rp_max": 2.5,
+   "bp_rp_min": 0.3,
+   "clip_sigma": 3.0,
+   "degree": 2,
+   "g_max": 20.0,
+   "g_min": 18.0,
+   "iterations": 5,
+   "min_stars": 50
+  },
+  "edge_margin_arcsec": 10.0,
+  "g_bins": [
+   [
+    10,
+    17
+   ],
+   [
+    17,
+    18
+   ],
+   [
+    18,
+    19
+   ],
+   [
+    19,
+    20
+   ],
+   [
+    20,
+    21.5
+   ]
+  ],
+  "gaia_box_margin_arcsec": 5.0,
+  "match_radius_arcsec": 0.5,
+  "min_bin_count": 20,
+  "position_outlier_sigma": 5.0
+ }
+}

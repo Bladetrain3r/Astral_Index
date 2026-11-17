@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tile · Astral Index</title><link rel="stylesheet" href="app.css"></head>
+<body>
+<header>
+  <h1><a href="index.html">Astral Index</a> <span class="note" id="crumb"></span></h1>
+  <p class="sub" id="where"></p>
+</header>
+<main>
+  <div class="stats" id="stats"></div>
+  <p class="note warn" id="thin"></p>
+
+  <div class="grid2">
+    <div class="panel"><b>Position residual</b> <span class="note">Euclid − propagated Gaia, mas</span><canvas id="p1"></canvas></div>
+    <div class="panel"><b>Position residual by brightness</b> <span class="note">mas against Gaia G</span><canvas id="p2"></canvas></div>
+    <div class="panel"><b>Brightness residual</b> <span class="note">mag about the colour relation, against Gaia G</span><canvas id="p3"></canvas></div>
+    <div class="panel"><b>Colour relation</b> <span class="note">Euclid VIS − Gaia G against BP − RP</span><canvas id="p4"></canvas></div>
+  </div>
+  <p class="note">Blue: usable stars. Orange: outliers beyond 5 times the measured scatter. Points beyond the axes are drawn at the edge. Click a point for the source.</p>
+
+  <div class="panel" id="source" style="display:none"></div>
+
+  <h2>Outliers</h2>
+  <p class="note">Disagreements, not errors and not discoveries. Context lists facts from both catalogues that often go with a disagreement.</p>
+  <div class="panel scroll" style="max-height:440px;overflow-y:auto;padding:0"><table id="out"></table></div>
+
+  <h2>Match audit</h2>
+  <div class="panel scroll"><table id="audit"></table><p class="note" id="auditnote"></p></div>
+
+  <h2>By brightness</h2>
+  <div class="panel scroll"><table id="bins"></table></div>
+
+  <h2>Sky view</h2>
+  <div class="panel"><button id="skybtn">Load sky image for this tile</button> <span class="note">Aladin Lite and survey images are loaded from CDS, Strasbourg.</span>
+    <div id="aladin" style="height:420px;display:none;margin-top:10px"></div></div>
+
+  <h2>Provenance</h2>
+  <div class="panel" id="prov"></div>
+  <p><a id="dl1">sources.csv</a> · <a id="dl2">outliers.csv</a> · <a id="dl3">summary.json</a> · <a id="dl4">match_audit.json</a></p>
+</main>
+<footer id="foot"></footer>
+<div id="tip"></div>
+<script src="common.js"></script>
+<script>
+const P = new URLSearchParams(location.search), tile = P.get("tile"), base = `data/tiles/${tile}/`;
+let S = [], sum = null, byId = {};
+const links = s => {
+  const c = `${(+s.ra_euclid).toFixed(6)} ${(+s.dec_euclid).toFixed(6)}`;
+  return `<a target="_blank" rel="noopener" href="https://sky.esa.int/?target=${encodeURIComponent(c)}&fov=0.02&sci=true">ESASky</a> ·
+   <a target="_blank" rel="noopener" href="https://simbad.cds.unistra.fr/simbad/sim-coo?Coord=${encodeURIComponent(c)}&Radius=5&Radius.unit=arcsec">SIMBAD</a>`;
+};
+function showSource(id, scroll) {
+  const s = byId[id], el = $("#source");
+  if (!s) { el.style.display = "block"; el.innerHTML = `<span class="warn">Gaia source ${esc(id)} is not among this tile's matched stars.</span>`; return; }
+  const row = (a, b, c) => `<tr><td>${a}</td><td>${b}</td><td>${c}</td></tr>`;
+  el.style.display = "block";
+  el.innerHTML = `<b>Gaia DR3 ${s.gaia_source_id}</b> = Euclid ${s.euclid_object_id} ${s.context.split(" ").filter(Boolean).map(c => `<span class="tag">${c}</span>`).join("")}
+  <div class="scroll"><table><thead><tr><th></th><th>Gaia DR3</th><th>Euclid DR1</th></tr></thead><tbody>
+  ${row("Position (deg)", "moved to the tile epoch by its proper motion", `${(+s.ra_euclid).toFixed(7)}, ${(+s.dec_euclid).toFixed(7)}`)}
+  ${row("Proper motion (mas/yr)", s.pmra === "" ? "none published" : `${fmt(s.pmra, 2)}, ${fmt(s.pmdec, 2)}`, "–")}
+  ${row("Brightness", `G ${fmt(s.g_mag, 3)}, BP−RP ${fmt(num(s.bp_rp), 3)}`, `VIS aperture ${fmt(num(s.vis_mag), 3)}`)}
+  ${row("Quality", `RUWE ${fmt(num(s.ruwe), 2)}${s.gaia_variable === "VARIABLE" ? ", variable" : ""}${s.has_gaia_spectrum === "true" ? ", has spectrum" : ""}`,
+        `tier ${s.tier}, flags ${s.flag_vis}/${s.det_quality_flag}, point-like ${fmt(num(s.point_like_prob), 2)}`)}
+  </tbody></table></div>
+  <p>Position: Euclid − Gaia = <b>${fmt(s.d_ra_mas, 1)}, ${fmt(s.d_dec_mas, 1)} mas</b> (before proper motion ${fmt(s.raw_d_ra_mas, 1)}, ${fmt(s.raw_d_dec_mas, 1)})${s.pos_z ? `, ${fmt(s.pos_z, 1)} times the scatter for its brightness` : ""}.<br>
+  Brightness: ${s.vis_resid_mag === "" ? "not in the colour relation's range" : `<b>${fmt(s.vis_resid_mag, 3)} mag</b> from the colour relation${s.vis_z ? `, ${fmt(s.vis_z, 1)} times the scatter` : ""} (negative: brighter in Euclid)`}.</p>
+  <p>${links(s)}</p>`;
+  if (scroll) el.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function plots() {
+  const u = S.filter(s => s.tier !== "C");
+  const isPO = s => num(s.pos_z) > sum.tolerances.position_outlier_sigma, isBO = s => Math.abs(num(s.vis_z)) > sum.tolerances.brightness_outlier_sigma;
+  const wire = (cv, hitFn) => { cv.onmousemove = ev => { const r = cv.getBoundingClientRect(), p = hitFn(ev.clientX - r.left, ev.clientY - r.top); cv.style.cursor = p ? "pointer" : "default"; tip(ev, p && `Gaia ${p.s.gaia_source_id}<br>G ${fmt(p.s.g_mag, 2)} · ${p.s.context || "no context flags"}`); };
+    cv.onmouseleave = () => tip(); cv.onclick = ev => { const r = cv.getBoundingClientRect(), p = hitFn(ev.clientX - r.left, ev.clientY - r.top); if (p) showSource(p.s.gaia_source_id, true); }; };
+  const pos = u.filter(s => s.pmra !== "");
+  wire($("#p1"), scatter($("#p1"), pos.map(s => ({ x: +s.d_ra_mas, y: +s.d_dec_mas, o: isPO(s), s })), { xr: [-80, 80], yr: [-80, 80], xl: "RA × cos Dec (mas)", yl: "Dec (mas)", xd: 0, yd: 0, zero: "xy", h: 320 }));
+  wire($("#p2"), scatter($("#p2"), pos.map(s => ({ x: +s.g_mag, y: Math.hypot(+s.d_ra_mas, +s.d_dec_mas), o: isPO(s), s })), { xr: [12, 21.5], yr: [0, 100], xl: "Gaia G (mag)", yl: "offset (mas)", yd: 0, h: 320 }));
+  const br = u.filter(s => s.vis_resid_mag !== "");
+  wire($("#p3"), scatter($("#p3"), br.map(s => ({ x: +s.g_mag, y: +s.vis_resid_mag, o: isBO(s), s })), { xr: [12, 21.5], yr: [-1, 1], xl: "Gaia G (mag)", yl: "residual (mag)", yd: 2, zero: "x", h: 320 }));
+  wire($("#p4"), scatter($("#p4"), br.map(s => ({ x: +s.bp_rp, y: +s.vis_mag - +s.g_mag, o: isBO(s), s })), { xr: [0.2, 2.6], yr: [-1.2, 1], xl: "BP − RP (mag)", yl: "VIS − G (mag)", yd: 2, h: 320 }));
+}
+(async () => {
+  if (!/^\d+$/.test(tile || "")) throw new Error("no tile given");
+  [sum, S] = await Promise.all([getJSON(base + "summary.json"), getCSV(base + "sources.csv")]);
+  const [audit, prov] = await Promise.all([getJSON(base + "match_audit.json"), getJSON(base + "provenance.json").catch(() => [])]);
+  S.forEach(s => byId[s.gaia_source_id] = s);
+  document.title = `Tile ${tile} · Astral Index`; $("#crumb").textContent = "› tile " + tile;
+  const b = sum.box_deg, c = sum.counts, p = sum.c2_position, br = sum.c3_brightness_colour_fit, a = sum.c1_match_audit;
+  $("#where").textContent = `RA ${fmt(b.ra_min, 3)} to ${fmt(b.ra_max, 3)}, Dec ${fmt(b.dec_min, 3)} to ${fmt(b.dec_max, 3)} · coordinate epoch ${fmt(sum.epoch_year, 3)} · Euclid ${sum.catalogues.euclid_release} against Gaia DR3`;
+  const tiers = p.by_tier || {}, sig = t => tiers[t] && tiers[t].sigma_ra_mas != null ? fmt(Math.hypot(tiers[t].sigma_ra_mas, tiers[t].sigma_dec_mas) / Math.SQRT2, 1) : "–";
+  const psf = br.other_flux_columns && br.other_flux_columns.flux_vis_psf;
+  $("#stats").innerHTML = [
+    [c.pairs.toLocaleString(), `matched stars, ${p.n_used ?? 0} usable`],
+    [p.median_ra_mas == null ? "–" : `${fmt(p.median_ra_mas, 1)}, ${fmt(p.median_dec_mas, 1)} mas`, "median offset, RA and Dec"],
+    [`${sig("A")} / ${sig("B")} mas`, "position scatter, tier A / tier B"],
+    [p.implied_epoch_offset && p.implied_epoch_offset.ra_year != null ? `${fmt(p.implied_epoch_offset.ra_year, 2)}, ${fmt(p.implied_epoch_offset.dec_year, 2)} yr` : "–", "implied epoch error, RA and Dec"],
+    [br.fitted ? fmt(br.fit_sigma_mag, 3) + " mag" : "–", `brightness scatter${psf && psf.fit_sigma_mag ? ` (PSF flux: ${fmt(psf.fit_sigma_mag, 3)})` : ""}`],
+    [`${sum.outliers.position} + ${sum.outliers.brightness}`, "position + brightness outliers"],
+  ].map(([x, y]) => `<div class="stat"><b>${x}</b><span>${y}</span></div>`).join("");
+  if ((p.n_used ?? 0) < 100) $("#thin").textContent = "Fewer than 100 usable stars: this tile is only partly covered by the catalogue, or sparse. Treat its statistics as indicative.";
+  plots(); addEventListener("resize", plots);
+  const out = await getCSV(base + "outliers.csv");
+  sortable($("#out"), out, [{ k: "gaia_source_id", h: "Gaia DR3 source" }, { k: "g_mag", h: "G" }, { k: "d_ra_mas", h: "ΔRA mas" }, { k: "d_dec_mas", h: "ΔDec mas" }, { k: "pos_z", h: "× scatter" },
+    { k: "vis_resid_mag", h: "Δ bright. mag" }, { k: "vis_z", h: "× scatter" }, { k: "tier", h: "Tier" }, { k: "context", h: "Context" }],
+    s => `<tr style="cursor:pointer" onclick="showSource('${s.gaia_source_id}',true)"><td class="mono">${s.gaia_source_id}</td><td>${fmt(s.g_mag, 2)}</td><td>${fmt(s.d_ra_mas, 1)}</td><td>${fmt(s.d_dec_mas, 1)}</td><td>${fmt(num(s.pos_z), 1)}</td>
+     <td>${fmt(num(s.vis_resid_mag), 3)}</td><td>${fmt(num(s.vis_z), 1)}</td><td>${s.tier}</td><td style="text-align:left">${esc(s.context)}</td></tr>`);
+  if (!out.length) $("#out").insertAdjacentHTML("afterend", '<p class="note" style="padding:8px">No outliers in this tile.</p>');
+  const A = [["agree", "Euclid's Gaia match and ours agree"], ["differ", "Euclid and we name different Euclid sources for a Gaia star"], ["only_euclid", "Euclid names a match we do not find within 0.5 arcsec"],
+    ["only_ours", "We find a match that Euclid's catalogue does not link"], ["duplicate_vis_nir", "One Gaia star claimed by a VIS detection and a near-infrared-only detection"],
+    ["duplicate_other", "One Gaia star claimed by two Euclid sources, other cases"], ["gaia_unmatched", "Gaia sources inside the tile with no Euclid source within 0.5 arcsec"],
+    ["euclid_names_unknown_gaia", "Euclid names a Gaia source that is not in Gaia DR3 at that place"]];
+  $("#audit").innerHTML = "<thead><tr><th>Case</th><th>Count</th></tr></thead><tbody>" + A.map(([k, h]) => `<tr><td>${h}</td><td>${a[k]}</td></tr>`).join("") + "</tbody>";
+  $("#auditnote").innerHTML = `The individual cases are in <a href="${base}match_audit.json">match_audit.json</a>. Gaia sources within 10 arcsec of the tile edge are left out: the neighbouring tile may hold their match.`;
+  const bins = Object.keys({ ...(p.by_g_bin || {}), ...(br.by_g_bin || {}) }).sort((x, y) => parseFloat(x) - parseFloat(y));
+  $("#bins").innerHTML = "<thead><tr><th>Gaia G</th><th>Stars</th><th>Scatter RA mas</th><th>Scatter Dec mas</th><th>Before proper motion, RA</th><th>Dec</th><th>Bright. median mag</th><th>Bright. scatter mag</th></tr></thead><tbody>" +
+    bins.map(k => { const x = (p.by_g_bin || {})[k] || {}, y = (br.by_g_bin || {})[k] || {}; return `<tr><td>${k}</td><td>${x.n ?? "–"}</td><td>${fmt(x.sigma_ra_mas, 1)}</td><td>${fmt(x.sigma_dec_mas, 1)}</td><td>${fmt(x.raw_sigma_ra_mas, 1)}</td><td>${fmt(x.raw_sigma_dec_mas, 1)}</td><td>${fmt(y.median_mag, 3)}</td><td>${fmt(y.sigma_mag, 3)}</td></tr>`; }).join("") + "</tbody>";
+  $("#prov").innerHTML = prov.length ? prov.map(r => `<details><summary><b>${esc(r.archive)}</b> · ${r.rows} rows · fetched ${esc(r.fetched_utc)} · <span class="mono">sha256 ${esc(r.sha256.slice(0, 16))}…</span></summary>
+    <pre>${esc(r.query)}</pre><span class="note">POST ${esc(r.url)} · snapshot <span class="mono">${esc(r.file)}</span> · sha256 <span class="mono">${esc(r.sha256)}</span></span></details>`).join("") : '<span class="note">No provenance file.</span>';
+  [["dl1", "sources.csv"], ["dl2", "outliers.csv"], ["dl3", "summary.json"], ["dl4", "match_audit.json"]].forEach(([i, f]) => $("#" + i).href = base + f);
+  $("#skybtn").onclick = () => {
+    const d = $("#aladin"); d.style.display = "block"; $("#skybtn").disabled = true;
+    const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/aladin-lite@3.6.5/dist/aladin.min.js";
+    s.onerror = () => d.innerHTML = '<span class="warn">Could not load Aladin Lite.</span>';
+    s.onload = () => A.init.then(() => {
+      const al = A.aladin("#aladin", { survey: "P/DSS2/color", fov: 0.7, target: `${(b.ra_min + b.ra_max) / 2} ${(b.dec_min + b.dec_max) / 2}`, cooFrame: "ICRSd" });
+      const cat = A.catalog({ name: "Outliers", sourceSize: 14, color: "#f0a35e" });
+      al.addCatalog(cat); cat.addSources(out.map(o => A.source(+o.ra_euclid, +o.dec_euclid, { gaia: o.gaia_source_id })));
+    }).catch(() => d.innerHTML = '<span class="warn">Aladin Lite failed to start.</span>');
+    document.head.appendChild(s);
+  };
+  if (P.get("source")) showSource(P.get("source"), true);
+  $("#foot").textContent = CREDIT;
+})().catch(e => { $("main").insertAdjacentHTML("afterbegin", `<p class="warn">Could not load this tile: ${esc(e.message)}</p>`); });
+</script>
+</body></html>

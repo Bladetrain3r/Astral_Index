@@ -1,0 +1,49 @@
+{
+  "_comment": "Provisional until G3 freezes them. Every threshold the checks use lives here.",
+  "candidate_flux_vis_ujy": 9.0,
+  "gaia_box_margin_arcsec": 5.0,
+  "edge_margin_arcsec": 10.0,
+  "match_radius_arcsec": 0.5,
+  "g_bins": [
+    [
+      10,
+      17
+    ],
+    [
+      17,
+      18
+    ],
+    [
+      18,
+      19
+    ],
+    [
+      19,
+      20
+    ],
+    [
+      20,
+      21.5
+    ]
+  ],
+  "min_bin_count": 20,
+  "position_outlier_sigma": 5.0,
+  "brightness_outlier_sigma": 5.0,
+  "colour_fit": {
+    "g_min": 18.0,
+    "g_max": 20.0,
+    "bp_rp_min": 0.3,
+    "bp_rp_max": 2.5,
+    "degree": 2,
+    "clip_sigma": 3.0,
+    "iterations": 5,
+    "min_stars": 50
+  },
+  "bad_flag_bits": 13,
+  "_bad_flag_bits": "1 contaminated or bad pixels, 4 saturated, 8 near a border (Euclid MER photometry cookbook). Tier A: both flags zero. Tier B: none of these bits; blended and bright-star-mask bits allowed. Tier C: the rest, not used.",
+  "brightness_flux": "flux_vis_2fwhm_aper",
+  "brightness_flux_also": [
+    "flux_vis_psf",
+    "flux_detection_total"
+  ]
+}
